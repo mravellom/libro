@@ -17,12 +17,16 @@ from libro.generation.cli import app as gen_app
 from libro.branding.cli import app as brand_app
 from libro.publication.cli import app as pub_app
 from libro.tracking.cli import app as track_app
+from libro.strategy.cli import app as strategy_app
+from libro.kdp.cli import app as kdp_app
 
 app.add_typer(intel_app, name="intel")
 app.add_typer(gen_app, name="generate")
 app.add_typer(brand_app, name="brand")
 app.add_typer(pub_app, name="publish")
 app.add_typer(track_app, name="track")
+app.add_typer(strategy_app, name="strategy")
+app.add_typer(kdp_app, name="kdp")
 
 
 # Database commands
@@ -95,3 +99,17 @@ def _init_test_fixtures():
         session.add(brand)
 
     console.print("[green]Test fixtures created.[/green]")
+
+
+# Web dashboard
+@app.command()
+def web(
+    port: int = typer.Option(8000, help="Port to listen on"),
+    host: str = typer.Option("0.0.0.0", help="Host to bind to"),
+):
+    """Start the web dashboard server."""
+    import uvicorn
+    from libro.web.app import app as fastapi_app
+
+    console.print(f"[green]Starting Libro dashboard at http://{host}:{port}[/green]")
+    uvicorn.run(fastapi_app, host=host, port=port)

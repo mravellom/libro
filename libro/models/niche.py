@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Text, func
+from sqlalchemy import String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from libro.database import Base
@@ -13,9 +13,12 @@ if TYPE_CHECKING:
 
 class Niche(Base):
     __tablename__ = "niches"
+    __table_args__ = (
+        UniqueConstraint("keyword", "marketplace", name="uq_niche_keyword_marketplace"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    keyword: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    keyword: Mapped[str] = mapped_column(String(255), index=True)
     category: Mapped[str | None] = mapped_column(String(255))
 
     # Scoring (weighted formula)
@@ -32,6 +35,11 @@ class Niche(Base):
     avg_reviews: Mapped[float | None] = mapped_column(default=None)
     avg_review_velocity: Mapped[float | None] = mapped_column(default=None)
     top_products_count: Mapped[int] = mapped_column(default=0)
+
+    # Niche classification: evergreen | trending
+    niche_type: Mapped[str] = mapped_column(String(20), default="evergreen")
+    # Marketplace: com | de | co.jp | co.uk | etc.
+    marketplace: Mapped[str] = mapped_column(String(20), default="com")
 
     # Status: discovered | scored | generating | testing | scaled | killed
     status: Mapped[str] = mapped_column(String(20), default="discovered")

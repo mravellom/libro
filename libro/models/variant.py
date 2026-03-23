@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from libro.models.brand import Brand
     from libro.models.niche import Niche
     from libro.models.publication import Publication
+    from libro.models.series import Series
 
 
 class Variant(Base):
@@ -31,6 +32,10 @@ class Variant(Base):
     # Similarity guard: hash of title+interior for dedup
     content_fingerprint: Mapped[str | None] = mapped_column(String(64))
 
+    # Series grouping (for product line generation)
+    series_id: Mapped[int | None] = mapped_column(ForeignKey("series.id"), default=None)
+    series_name: Mapped[str | None] = mapped_column(String(255))
+
     # draft | ready | selected | published | rejected
     status: Mapped[str] = mapped_column(String(20), default="draft")
     created_at: Mapped[datetime] = mapped_column(default=func.now())
@@ -38,3 +43,4 @@ class Variant(Base):
     niche: Mapped["Niche"] = relationship(back_populates="variants")
     brand: Mapped["Brand"] = relationship(back_populates="variants")
     publication: Mapped["Publication | None"] = relationship(back_populates="variant")
+    series: Mapped["Series | None"] = relationship(back_populates="variants")

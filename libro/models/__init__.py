@@ -6,6 +6,7 @@ from libro.models.variant import Variant
 from libro.models.brand import Brand
 from libro.models.publication import Publication
 from libro.models.tracking import TrackingSnapshot
+from libro.models.series import Series
 
 __all__ = [
     "Niche",
@@ -14,4 +15,5 @@ __all__ = [
     "Brand",
     "Publication",
     "TrackingSnapshot",
+    "Series",
 ]

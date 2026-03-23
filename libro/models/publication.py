@@ -21,6 +21,12 @@ class Publication(Base):
     published_at: Mapped[datetime | None] = mapped_column(default=None)
     evaluation_start: Mapped[datetime | None] = mapped_column(default=None)
     evaluation_end: Mapped[datetime | None] = mapped_column(default=None)
+    # Marketplace
+    marketplace: Mapped[str] = mapped_column(String(20), default="com")
+    # Impressions tracking (for auto-kill rule)
+    impressions_detected: Mapped[bool] = mapped_column(default=False)
+    auto_kill_date: Mapped[datetime | None] = mapped_column(default=None)
+
     # None | scale | iterate | kill
     decision: Mapped[str | None] = mapped_column(String(20))
     decided_at: Mapped[datetime | None] = mapped_column(default=None)

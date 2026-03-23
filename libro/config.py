@@ -69,6 +69,26 @@ class Settings(BaseSettings):
     similarity_title_threshold: float = _yaml.get("similarity_title_threshold", 0.7)
     similarity_max_similar_active: int = _yaml.get("similarity_max_similar_active", 3)
 
+    # Strategy — Flooding
+    flood_daily_target: int = _yaml.get("flood_daily_target", 15)
+    flood_evergreen_ratio: float = _yaml.get("flood_evergreen_ratio", 0.7)
+    flood_trending_ratio: float = _yaml.get("flood_trending_ratio", 0.3)
+    max_bsr_threshold: int = _yaml.get("max_bsr_threshold", 300_000)
+
+    # Strategy — Auto-kill
+    auto_kill_days: int = _yaml.get("auto_kill_days", 21)
+
+    # Strategy — Marketplaces
+    marketplaces: list[str] = _yaml.get("marketplaces", ["com", "de", "co.jp"])
+
+    # Strategy — Revenue targets
+    target_catalog_size: int = _yaml.get("target_catalog_size", 500)
+    target_net_per_book: float = _yaml.get("target_net_per_book", 1.00)
+
+    # KDP Uploader
+    kdp_delay_min: float = _yaml.get("kdp_delay_min", 3.0)
+    kdp_delay_max: float = _yaml.get("kdp_delay_max", 8.0)
+
 
 @lru_cache
 def get_settings() -> Settings:
