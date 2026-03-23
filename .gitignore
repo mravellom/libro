@@ -1,0 +1,9 @@
+.env
+data/libro.db
+data/output/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.venv/

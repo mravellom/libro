@@ -1,0 +1,34 @@
+amazon_marketplace: "com"
+default_trim_size: "6x9"
+default_page_count: 120
+evaluation_period_days: 14
+snapshot_interval_hours: 12
+
+# Scoring weights (must sum to 1.0)
+scoring:
+  weight_demand: 0.4
+  weight_competition: 0.2
+  weight_trend: 0.2
+  weight_stability: 0.1
+  weight_price: 0.1
+
+# Scoring thresholds
+min_bsr_for_demand: 500000
+max_reviews_for_low_competition: 50
+min_opportunity_score: 0.6
+min_price_for_margin: 6.99
+
+# Scraping
+scraper_delay_min: 2.0
+scraper_delay_max: 5.0
+
+# Similarity guard thresholds
+similarity_title_threshold: 0.7
+similarity_max_similar_active: 3
+
+# Selectors (update when Amazon changes HTML)
+selectors:
+  search_result_item: "div[data-component-type='s-search-result']"
+  product_title: "h2 a span"
+  product_price: "span.a-price > span.a-offscreen"
+  bsr_text: "#productDetails_detailBullets_sections1 tr"
