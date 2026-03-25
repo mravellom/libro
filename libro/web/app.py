@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from libro.database import get_session
+from libro.database import get_session, ensure_schema
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -16,10 +16,16 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 app = FastAPI(title="Libro KDP Dashboard", version="0.1.0")
 
 
+@app.on_event("startup")
+def startup_migrate():
+    """Auto-migrate DB schema on app startup."""
+    ensure_schema()
+
+
 # --- Pydantic schemas for request bodies ---
 
 class FloodRequest(BaseModel):
-    target: int = 15
+    target: int = 3
     dry_run: bool = False
     brand_id: int | None = None
 
@@ -34,6 +40,21 @@ class CloneRequest(BaseModel):
 
 class CoverABRequest(BaseModel):
     count: int = 3
+
+class ReviewRequest(BaseModel):
+    action: str  # "approve" or "reject"
+    notes: str = ""
+
+class BatchReviewRequest(BaseModel):
+    variant_ids: list[int]
+    action: str  # "approve" or "reject"
+
+class DecisionRequest(BaseModel):
+    decision: str  # "scale", "iterate", "kill", "snooze"
+    snooze_days: int = 7
+
+class BatchDecisionRequest(BaseModel):
+    decisions: list[dict]  # [{"pub_id": 1, "decision": "scale"}, ...]
 
 
 # --- HTML Dashboard ---
@@ -176,6 +197,232 @@ def run_clone(variant_id: int, req: CloneRequest):
     return asdict(result)
 
 
+# --- Human Review Gate ---
+
+@app.get("/api/pending-review")
+def get_pending_review():
+    """List all variants awaiting human review."""
+    from libro.models.variant import Variant
+    with get_session() as session:
+        variants = (
+            session.query(Variant)
+            .filter(Variant.status == "pending_review")
+            .order_by(Variant.created_at.desc())
+            .all()
+        )
+        return [
+            {
+                "id": v.id,
+                "title": v.title,
+                "subtitle": v.subtitle,
+                "niche": v.niche.keyword if v.niche else "?",
+                "interior_type": v.interior_type,
+                "trim_size": v.trim_size,
+                "page_count": v.page_count,
+                "interior_seed": v.interior_seed,
+                "has_interior": bool(v.interior_pdf_path),
+                "has_cover": bool(v.cover_pdf_path),
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+            }
+            for v in variants
+        ]
+
+
+@app.post("/api/review/{variant_id}")
+def review_variant(variant_id: int, req: ReviewRequest):
+    """Approve or reject a variant."""
+    from libro.models.variant import Variant
+    with get_session() as session:
+        variant = session.get(Variant, variant_id)
+        if not variant:
+            return {"error": f"Variant #{variant_id} not found"}
+        if variant.status != "pending_review":
+            return {"error": f"Variant #{variant_id} is not pending review (status: {variant.status})"}
+
+        if req.action == "approve":
+            variant.status = "ready"
+        elif req.action == "reject":
+            variant.status = "rejected"
+        else:
+            return {"error": f"Invalid action: {req.action}. Use 'approve' or 'reject'"}
+
+        return {"variant_id": variant_id, "new_status": variant.status}
+
+
+@app.post("/api/review/batch")
+def batch_review(req: BatchReviewRequest):
+    """Approve or reject multiple variants."""
+    from libro.models.variant import Variant
+    results = []
+    with get_session() as session:
+        for vid in req.variant_ids:
+            variant = session.get(Variant, vid)
+            if not variant or variant.status != "pending_review":
+                results.append({"variant_id": vid, "error": "not found or not pending"})
+                continue
+            variant.status = "ready" if req.action == "approve" else "rejected"
+            results.append({"variant_id": vid, "new_status": variant.status})
+    return {"results": results}
+
+
+# --- Advisory Recommendations ---
+
+@app.post("/api/evaluate")
+def run_evaluate():
+    """Run evaluation pipeline — generates recommendations without applying decisions."""
+    from libro.strategy.optimizer import evaluate_all
+    with get_session() as session:
+        result = evaluate_all(session)
+    return asdict(result)
+
+
+@app.get("/api/recommendations")
+def get_recommendations():
+    """List publications with pending recommendations."""
+    from libro.models.publication import Publication
+    with get_session() as session:
+        pubs = (
+            session.query(Publication)
+            .filter(
+                Publication.recommended_decision.isnot(None),
+                Publication.decision.is_(None),
+            )
+            .all()
+        )
+        import json
+        return [
+            {
+                "id": p.id,
+                "title": p.variant.title[:50] if p.variant else "?",
+                "asin": p.asin,
+                "marketplace": p.marketplace,
+                "recommended_decision": p.recommended_decision,
+                "confidence": round(p.recommendation_confidence or 0, 2),
+                "reasons": json.loads(p.recommendation_reasons) if p.recommendation_reasons else [],
+                "recommended_at": p.recommended_at.isoformat() if p.recommended_at else None,
+                "published_at": p.published_at.isoformat() if p.published_at else None,
+                "snapshot_count": len(p.snapshots) if p.snapshots else 0,
+            }
+            for p in pubs
+        ]
+
+
+@app.post("/api/decide/{pub_id}")
+def decide_publication(pub_id: int, req: DecisionRequest):
+    """Apply a human decision to a publication."""
+    from libro.models.publication import Publication
+    from datetime import datetime, timedelta
+    with get_session() as session:
+        pub = session.get(Publication, pub_id)
+        if not pub:
+            return {"error": f"Publication #{pub_id} not found"}
+
+        if req.decision == "snooze":
+            pub.snoozed_until = datetime.utcnow() + timedelta(days=req.snooze_days)
+            pub.recommended_decision = None
+            pub.recommendation_confidence = None
+            pub.recommendation_reasons = None
+            pub.recommended_at = None
+            return {"pub_id": pub_id, "snoozed_until": pub.snoozed_until.isoformat()}
+
+        # "accept" applies the recommended_decision as the final decision
+        decision = req.decision
+        if decision == "accept":
+            if not pub.recommended_decision:
+                return {"error": f"Publication #{pub_id} has no recommendation to accept"}
+            decision = pub.recommended_decision
+
+        if decision not in ("scale", "iterate", "kill"):
+            return {"error": f"Invalid decision: {decision}"}
+
+        pub.decision = decision
+        pub.decided_at = datetime.utcnow()
+        return {"pub_id": pub_id, "decision": pub.decision}
+
+
+class BatchDecisionRequest(BaseModel):
+    decisions: list[dict]  # [{"pub_id": int, "decision": str, "snooze_days": int?}]
+
+
+@app.post("/api/decide/batch")
+def decide_batch(req: BatchDecisionRequest):
+    """Apply decisions to multiple publications at once."""
+    from libro.models.publication import Publication
+    from datetime import datetime, timedelta
+    results = []
+    with get_session() as session:
+        for item in req.decisions:
+            pub_id = item.get("pub_id")
+            decision = item.get("decision")
+            pub = session.get(Publication, pub_id)
+            if not pub:
+                results.append({"pub_id": pub_id, "error": "not found"})
+                continue
+
+            if decision == "snooze":
+                snooze_days = item.get("snooze_days", 7)
+                pub.snoozed_until = datetime.utcnow() + timedelta(days=snooze_days)
+                pub.recommended_decision = None
+                pub.recommendation_confidence = None
+                pub.recommendation_reasons = None
+                pub.recommended_at = None
+                results.append({"pub_id": pub_id, "snoozed_until": pub.snoozed_until.isoformat()})
+            elif decision == "accept":
+                if not pub.recommended_decision:
+                    results.append({"pub_id": pub_id, "error": "no recommendation to accept"})
+                    continue
+                pub.decision = pub.recommended_decision
+                pub.decided_at = datetime.utcnow()
+                results.append({"pub_id": pub_id, "decision": pub.decision})
+            elif decision in ("scale", "iterate", "kill"):
+                pub.decision = decision
+                pub.decided_at = datetime.utcnow()
+                results.append({"pub_id": pub_id, "decision": pub.decision})
+            else:
+                results.append({"pub_id": pub_id, "error": f"invalid decision: {decision}"})
+    return {"results": results}
+
+
+# --- KDP 5.4.8 Compliance ---
+
+@app.get("/api/risk")
+def get_risk_assessment():
+    """Get portfolio-level 5.4.8 risk assessment."""
+    from libro.strategy.compliance import assess_portfolio_risk
+    from dataclasses import asdict
+    with get_session() as session:
+        risk = assess_portfolio_risk(session)
+        return asdict(risk)
+
+
+@app.get("/api/compliance/{variant_id}")
+def get_compliance_check(variant_id: int):
+    """Run compliance checklist on a single variant."""
+    from libro.publication.checklist import run_compliance_checklist
+    with get_session() as session:
+        result = run_compliance_checklist(session, variant_id)
+        return {
+            "variant_id": result.variant_id,
+            "passed": result.passed,
+            "errors": [{"name": c.name, "message": c.message} for c in result.errors],
+            "warnings": [{"name": c.name, "message": c.message} for c in result.warnings],
+            "checks": [
+                {"name": c.name, "passed": c.passed, "message": c.message, "severity": c.severity}
+                for c in result.checks
+            ],
+        }
+
+
+@app.post("/api/compliance/scan")
+def run_compliance_scan():
+    """Trigger full portfolio compliance scan."""
+    from libro.strategy.compliance import assess_portfolio_risk
+    from dataclasses import asdict
+    with get_session() as session:
+        risk = assess_portfolio_risk(session)
+        return asdict(risk)
+
+
 # --- KDP Deploy Pipeline ---
 
 class DeployRequest(BaseModel):
@@ -250,19 +497,25 @@ def launch_deploy(req: DeployRequest):
 
     # Try to open in a new terminal window
     terminal = None
-    for term in ["gnome-terminal", "xfce4-terminal", "konsole", "xterm"]:
+    for term in ["x-terminal-emulator", "qterminal", "gnome-terminal", "xfce4-terminal", "konsole", "kitty", "alacritty", "xterm"]:
         if shutil.which(term):
             terminal = term
             break
 
+    full_cmd = f"{cmd}; echo ''; echo 'Presiona Enter para cerrar...'; read"
+
     if terminal == "gnome-terminal":
-        subprocess.Popen(["gnome-terminal", "--", "bash", "-c", f"{cmd}; echo ''; echo 'Presiona Enter para cerrar...'; read"])
+        subprocess.Popen(["gnome-terminal", "--", "bash", "-c", full_cmd])
+    elif terminal in ("x-terminal-emulator", "qterminal", "lxterminal", "mate-terminal"):
+        subprocess.Popen([terminal, "-e", f"bash -c '{full_cmd}'"])
     elif terminal == "xfce4-terminal":
-        subprocess.Popen(["xfce4-terminal", "-e", f"bash -c \"{cmd}; echo ''; echo 'Presiona Enter para cerrar...'; read\""])
+        subprocess.Popen(["xfce4-terminal", "-e", f"bash -c \"{full_cmd}\""])
     elif terminal == "konsole":
-        subprocess.Popen(["konsole", "-e", "bash", "-c", f"{cmd}; echo ''; echo 'Presiona Enter para cerrar...'; read"])
+        subprocess.Popen(["konsole", "-e", "bash", "-c", full_cmd])
+    elif terminal in ("kitty", "alacritty", "wezterm"):
+        subprocess.Popen([terminal, "-e", "bash", "-c", full_cmd])
     elif terminal == "xterm":
-        subprocess.Popen(["xterm", "-e", f"bash -c \"{cmd}; echo ''; echo 'Presiona Enter para cerrar...'; read\""])
+        subprocess.Popen(["xterm", "-e", f"bash -c \"{full_cmd}\""])
     else:
         return {"launched": False, "error": "No terminal emulator found", "manual_command": f"libro kdp batch --limit {limit}"}
 

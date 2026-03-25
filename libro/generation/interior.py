@@ -14,6 +14,7 @@ def generate_interior(
     output_path: Path,
     trim_size: str = "6x9",
     page_count: int = 120,
+    seed: int | None = None,
 ) -> Path:
     """Generate an interior PDF using a named template.
 
@@ -22,16 +23,17 @@ def generate_interior(
         output_path: Where to save the PDF.
         trim_size: KDP trim size (e.g., "6x9", "5.5x8.5").
         page_count: Number of pages.
+        seed: Variant ID for unique style generation.
 
     Returns:
         Path to the generated PDF.
     """
-    template = get_template(template_name)
+    template = get_template(template_name, seed=seed)
     log.info(
         f"Generating {template_name} interior: {trim_size}, "
-        f"{page_count} pages → {output_path}"
+        f"{page_count} pages, seed={seed} → {output_path}"
     )
-    return template.generate_pdf(output_path, trim_size, page_count)
+    return template.generate_pdf(output_path, trim_size, page_count, seed=seed)
 
 
 def list_templates() -> list[dict[str, str]]:

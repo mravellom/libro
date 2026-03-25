@@ -25,6 +25,7 @@ class CatalogMetrics:
     total_published: int = 0
     total_ready: int = 0
     total_draft: int = 0
+    total_pending_review: int = 0
 
     # Decision breakdown
     decisions_scale: int = 0
@@ -57,6 +58,12 @@ class CatalogMetrics:
     kill_rate_pct: float = 0.0
     scale_rate_pct: float = 0.0
 
+    # Compliance (5.4.8 risk)
+    compliance_flagged: int = 0
+    compliance_blocked: int = 0
+    estimated_unpaid_total: float = 0.0
+    risk_level: str = "unknown"
+
 
 def get_catalog_metrics(session: Session) -> CatalogMetrics:
     """Calculate comprehensive catalog metrics."""
@@ -71,6 +78,7 @@ def get_catalog_metrics(session: Session) -> CatalogMetrics:
     m.total_published = session.query(Variant).filter(Variant.status == "published").count()
     m.total_ready = session.query(Variant).filter(Variant.status == "ready").count()
     m.total_draft = session.query(Variant).filter(Variant.status == "draft").count()
+    m.total_pending_review = session.query(Variant).filter(Variant.status == "pending_review").count()
 
     # Publication decisions
     pubs = session.query(Publication).all()
@@ -127,5 +135,29 @@ def get_catalog_metrics(session: Session) -> CatalogMetrics:
     # Series count
     from libro.models.series import Series
     m.total_series = session.query(Series).count()
+
+    # Compliance counts (lightweight — no full risk assessment here)
+    m.compliance_flagged = (
+        session.query(Publication)
+        .filter(Publication.compliance_status == "flagged")
+        .count()
+    )
+    m.compliance_blocked = (
+        session.query(Publication)
+        .filter(Publication.compliance_status == "blocked")
+        .count()
+    )
+    m.estimated_unpaid_total = round(
+        sum(p.estimated_total_royalties or 0.0 for p in pubs if p.decision != "kill"),
+        2,
+    )
+    if m.compliance_blocked > 0:
+        m.risk_level = "high"
+    elif m.compliance_flagged > 3:
+        m.risk_level = "medium"
+    elif m.compliance_flagged > 0:
+        m.risk_level = "low"
+    else:
+        m.risk_level = "clear"
 
     return m

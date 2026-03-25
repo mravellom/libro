@@ -32,11 +32,15 @@ class Variant(Base):
     # Similarity guard: hash of title+interior for dedup
     content_fingerprint: Mapped[str | None] = mapped_column(String(64))
 
+    # Interior uniqueness: seed for reproducible unique generation
+    interior_seed: Mapped[int | None] = mapped_column(default=None)
+    interior_content_hash: Mapped[str | None] = mapped_column(String(64))
+
     # Series grouping (for product line generation)
     series_id: Mapped[int | None] = mapped_column(ForeignKey("series.id"), default=None)
     series_name: Mapped[str | None] = mapped_column(String(255))
 
-    # draft | ready | selected | published | rejected
+    # draft | pending_review | ready | selected | published | rejected
     status: Mapped[str] = mapped_column(String(20), default="draft")
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 

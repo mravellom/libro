@@ -27,13 +27,26 @@ similarity_title_threshold: 0.7
 similarity_max_similar_active: 3
 
 # Strategy — Flooding
-flood_daily_target: 15
+flood_daily_target: 3
+flood_max_daily_target: 5
 flood_evergreen_ratio: 0.7
 flood_trending_ratio: 0.3
 max_bsr_threshold: 300000
 
-# Strategy — Auto-kill
-auto_kill_days: 21
+# Human review gate (books need approval before upload queue)
+require_human_review: true
+
+# Strategy — Evaluation (advisory, no auto-kill)
+evaluation_min_days: 21
+auto_apply_decisions: false
+default_snooze_days: 7
+
+# Compliance (5.4.8 risk prevention)
+compliance_velocity_7d_max: 10
+compliance_velocity_30d_max: 30
+compliance_similarity_threshold: 0.85
+compliance_max_similar_catalog: 5
+compliance_recheck_days: 7
 
 # Strategy — Marketplaces
 marketplaces:

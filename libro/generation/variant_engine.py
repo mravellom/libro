@@ -120,6 +120,15 @@ def generate_variants(
         niche.status = "generating"
         session.flush()
 
+        # Assign interior seeds after flush (variant IDs now assigned)
+        for v in created:
+            v.interior_seed = v.id
+            # Update fingerprint to include seed
+            v.content_fingerprint = content_fingerprint(
+                v.title, v.interior_type, v.trim_size, seed=v.interior_seed
+            )
+        session.flush()
+
     return created
 
 

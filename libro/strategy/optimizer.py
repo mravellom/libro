@@ -1,8 +1,9 @@
-"""Optimizer — Phase 2 logic: auto-kill, series generation, A/B cover testing."""
+"""Optimizer — advisory evaluation, series generation, A/B cover testing."""
 
 import json
 import logging
 import random
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -16,30 +17,49 @@ from libro.models.series import Series
 log = logging.getLogger(__name__)
 
 
-# --- Auto-Kill ---
+# --- Advisory Evaluation ---
+
+@dataclass
+class EvaluationResult:
+    """Summary of advisory evaluation run."""
+    checked: int = 0
+    recommendations: dict = field(default_factory=lambda: {"scale": 0, "iterate": 0, "kill": 0})
+    snoozed_skipped: int = 0
+    details: list[str] = field(default_factory=list)
+
 
 @dataclass
 class KillResult:
-    """Summary of auto-kill execution."""
+    """Summary of auto-kill execution (deprecated)."""
     checked: int = 0
     killed: int = 0
     spared: int = 0
     details: list[str] = field(default_factory=list)
 
 
-def auto_kill_check(session: Session, days: int | None = None) -> KillResult:
-    """Mark publications without impressions after N days as 'kill'.
+def evaluate_all(session: Session, days: int | None = None) -> EvaluationResult:
+    """Evaluate all pending publications and set advisory recommendations.
 
-    Rule: If a book has no organic impressions in 21 days, kill it.
-    We approximate this by checking if any snapshots show BSR data
-    (a book with no BSR/sales data = no impressions).
+    Queries publications where ``decision IS NULL`` and ``published_at`` is at
+    least ``evaluation_min_days`` ago.  For each publication, computes a
+    recommended decision (scale / iterate / kill) using the
+    :class:`~libro.tracking.evaluator.PerformanceEvaluator` when sufficient
+    snapshot data exists, falling back to a simple activity-based heuristic.
+
+    Recommendations are written to advisory columns on the publication so a
+    human operator can review them via the dashboard.  If
+    ``settings.auto_apply_decisions`` is ``True``, the final ``decision`` column
+    is also set (backward-compatible auto-kill behaviour).
     """
-    settings = get_settings()
-    kill_days = days or settings.auto_kill_days
-    cutoff = datetime.utcnow() - timedelta(days=kill_days)
-    result = KillResult()
+    from libro.tracking.evaluator import PerformanceEvaluator
+    from libro.models.tracking import TrackingSnapshot
 
-    # Publications without a decision, published before cutoff
+    settings = get_settings()
+    eval_days = days or settings.evaluation_min_days
+    cutoff = datetime.utcnow() - timedelta(days=eval_days)
+    now = datetime.utcnow()
+    result = EvaluationResult()
+
     pubs = (
         session.query(Publication)
         .filter(
@@ -50,42 +70,118 @@ def auto_kill_check(session: Session, days: int | None = None) -> KillResult:
         .all()
     )
 
+    evaluator = PerformanceEvaluator()
+
     for pub in pubs:
+        # Skip snoozed publications
+        if pub.snoozed_until and pub.snoozed_until > now:
+            result.snoozed_skipped += 1
+            continue
+
         result.checked += 1
-
-        # Check if any snapshot shows real activity
-        has_activity = False
-        if pub.snapshots:
-            for snap in pub.snapshots:
-                if snap.bsr and snap.bsr < 3_000_000:
-                    has_activity = True
-                    break
-                if snap.reviews_count and snap.reviews_count > 0:
-                    has_activity = True
-                    break
-                if snap.estimated_daily_sales and snap.estimated_daily_sales > 0.05:
-                    has_activity = True
-                    break
-
-        if pub.impressions_detected:
-            has_activity = True
-
         title = pub.variant.title[:40] if pub.variant else f"pub #{pub.id}"
 
-        if not has_activity:
-            pub.decision = "kill"
-            pub.decided_at = datetime.utcnow()
-            if pub.variant and pub.variant.niche:
-                pub.variant.niche.status = "killed"
-            result.killed += 1
-            result.details.append(f"KILL: {title} — no activity after {kill_days} days")
-            log.info(f"Auto-killed publication #{pub.id}: {title}")
+        # Gather snapshots for rich evaluation
+        snapshots = (
+            session.query(TrackingSnapshot)
+            .filter(TrackingSnapshot.publication_id == pub.id)
+            .order_by(TrackingSnapshot.captured_at)
+            .all()
+        )
+
+        if len(snapshots) >= evaluator.min_snapshots:
+            # Use full evaluator logic
+            evaluation = evaluator.evaluate(pub, snapshots)
+            recommendation = evaluation.recommendation
+            confidence = evaluation.confidence
+            reasons = evaluation.reasons
         else:
-            result.spared += 1
-            result.details.append(f"SPARE: {title} — has activity")
+            # Fallback: simple activity-based heuristic (mirrors old auto-kill)
+            recommendation, confidence, reasons = _simple_evaluate(pub, eval_days)
+
+        # Write advisory columns
+        pub.recommended_decision = recommendation
+        pub.recommendation_confidence = confidence
+        pub.recommendation_reasons = json.dumps(reasons)
+        pub.recommended_at = now
+
+        # Backward-compatible auto-apply
+        if settings.auto_apply_decisions:
+            pub.decision = recommendation
+            pub.decided_at = now
+            if recommendation == "kill" and pub.variant and pub.variant.niche:
+                pub.variant.niche.status = "killed"
+
+        result.recommendations[recommendation] += 1
+        result.details.append(
+            f"{recommendation.upper()} ({confidence:.0%}): {title} — {reasons[-1] if reasons else 'no detail'}"
+        )
+        log.info(
+            "Evaluated publication #%d (%s): %s (confidence=%.2f)",
+            pub.id, title, recommendation, confidence,
+        )
 
     session.flush()
     return result
+
+
+def _simple_evaluate(pub: Publication, eval_days: int) -> tuple[str, float, list[str]]:
+    """Fallback heuristic when not enough snapshots exist for full evaluation.
+
+    Returns ``(recommendation, confidence, reasons)`` using the same activity
+    checks that the old ``auto_kill_check`` used.
+    """
+    reasons: list[str] = []
+    has_activity = False
+
+    if pub.snapshots:
+        for snap in pub.snapshots:
+            if snap.bsr and snap.bsr < 3_000_000:
+                has_activity = True
+                reasons.append(f"BSR {snap.bsr:,} indicates visibility")
+                break
+            if snap.reviews_count and snap.reviews_count > 0:
+                has_activity = True
+                reasons.append(f"{snap.reviews_count} review(s) detected")
+                break
+            if snap.estimated_daily_sales and snap.estimated_daily_sales > 0.05:
+                has_activity = True
+                reasons.append(f"Estimated sales {snap.estimated_daily_sales:.2f}/day")
+                break
+
+    if pub.impressions_detected:
+        has_activity = True
+        reasons.append("Impressions detected")
+
+    if not has_activity:
+        reasons.append(f"No activity after {eval_days} days")
+        return "kill", 0.8, reasons
+
+    reasons.append("Some activity present — needs more data")
+    return "iterate", 0.4, reasons
+
+
+def auto_kill_check(session: Session, days: int | None = None) -> KillResult:
+    """Deprecated: use :func:`evaluate_all` instead.
+
+    This wrapper calls ``evaluate_all`` and converts the result into a
+    ``KillResult`` for backward compatibility.
+    """
+    warnings.warn(
+        "auto_kill_check() is deprecated; use evaluate_all() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    log.warning("auto_kill_check() is deprecated — migrating call to evaluate_all()")
+
+    eval_result = evaluate_all(session, days=days)
+
+    return KillResult(
+        checked=eval_result.checked,
+        killed=eval_result.recommendations.get("kill", 0),
+        spared=eval_result.checked - eval_result.recommendations.get("kill", 0),
+        details=eval_result.details,
+    )
 
 
 # --- Find Winners ---

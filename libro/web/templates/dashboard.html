@@ -33,6 +33,8 @@
         .btn-green:hover { background: #047857; }
         .btn-purple { background: #7c3aed; color: white; }
         .btn-purple:hover { background: #6d28d9; }
+        .btn-amber { background: #d97706; color: white; }
+        .btn-amber:hover { background: #b45309; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         .toast { position: fixed; top: 20px; right: 20px; padding: 12px 24px; border-radius: 8px; z-index: 1000; animation: slideIn 0.3s ease; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
@@ -51,13 +53,13 @@
             </div>
             <div class="flex gap-3">
                 <button class="btn btn-green" onclick="runFlood(false)" id="btn-flood">
-                    Flood (15 libros)
+                    Generate (3 books)
                 </button>
                 <button class="btn btn-blue" onclick="runFlood(true)" id="btn-flood-dry">
-                    Flood Dry Run
+                    Generate Dry Run
                 </button>
-                <button class="btn btn-red" onclick="runAutoKill()" id="btn-kill">
-                    Auto-Kill (21d)
+                <button class="btn btn-amber" onclick="runEvaluate()" id="btn-evaluate">
+                    Evaluate
                 </button>
             </div>
         </div>
@@ -68,7 +70,7 @@
         <div class="card p-5">
             <p class="text-slate-400 text-sm">Catalogo Total</p>
             <p class="stat-value text-white" id="m-total-variants">-</p>
-            <p class="text-xs text-slate-500 mt-1"><span id="m-published">0</span> publicados / <span id="m-ready">0</span> listos</p>
+            <p class="text-xs text-slate-500 mt-1"><span id="m-published">0</span> publicados / <span id="m-ready">0</span> listos / <span id="m-pending-review">0</span> pendientes</p>
         </div>
         <div class="card p-5">
             <p class="text-slate-400 text-sm">Revenue Mensual Est.</p>
@@ -120,6 +122,116 @@
                     <div style="width: 0%; background: #dc2626; height: 100%;" id="t-kill-bar"></div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- 5.4.8 Risk Monitor -->
+    <div class="max-w-7xl mx-auto card p-5 mb-8" id="risk-card" style="border-color: #374151;">
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center gap-3">
+                <h2 class="text-lg font-semibold text-white">5.4.8 Risk Monitor</h2>
+                <span id="risk-badge" class="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">unknown</span>
+            </div>
+            <button onclick="runComplianceScan()" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded">
+                Scan Compliance
+            </button>
+        </div>
+
+        <!-- Row 1: Financial exposure -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div class="bg-slate-800 rounded p-3 text-center">
+                <div class="text-xs text-slate-400 mb-1">Est. Unpaid</div>
+                <div class="text-lg font-bold text-white">$<span id="risk-unpaid">0</span></div>
+                <div class="text-xs text-slate-500">(estimated)</div>
+            </div>
+            <div class="bg-slate-800 rounded p-3 text-center">
+                <div class="text-xs text-slate-400 mb-1">At Risk</div>
+                <div class="text-lg font-bold" id="risk-at-risk-val">$<span id="risk-at-risk">0</span></div>
+            </div>
+            <div class="bg-slate-800 rounded p-3 text-center">
+                <div class="text-xs text-slate-400 mb-1">Exposure</div>
+                <div class="text-lg font-bold" id="risk-exposure-val"><span id="risk-exposure">0</span>%</div>
+            </div>
+            <div class="bg-slate-800 rounded p-3 text-center">
+                <div class="text-xs text-slate-400 mb-1">Risk Level</div>
+                <div class="text-lg font-bold" id="risk-level-display">--</div>
+            </div>
+        </div>
+
+        <!-- Row 2: Pattern detection -->
+        <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-slate-800 rounded p-3 text-center">
+                <div class="text-xs text-slate-400 mb-1">Velocity</div>
+                <div class="text-sm font-bold text-white"><span id="risk-vel-7d">0</span>/7d &middot; <span id="risk-vel-30d">0</span>/30d</div>
+                <div class="text-xs mt-1" id="risk-vel-status"></div>
+            </div>
+            <div class="bg-slate-800 rounded p-3 text-center">
+                <div class="text-xs text-slate-400 mb-1">Compliance</div>
+                <div class="text-xs text-white mt-1">
+                    <span class="text-green-400" id="risk-compliant">0</span> ok &middot;
+                    <span class="text-amber-400" id="risk-flagged">0</span> flagged &middot;
+                    <span class="text-red-400" id="risk-blocked">0</span> blocked
+                </div>
+            </div>
+            <div class="bg-slate-800 rounded p-3 text-center">
+                <div class="text-xs text-slate-400 mb-1">Similarity</div>
+                <div class="text-sm font-bold text-white">Max <span id="risk-sim-max">0</span>%</div>
+                <div class="text-xs mt-1"><span id="risk-sim-clusters">0</span> cluster(s)</div>
+            </div>
+        </div>
+
+        <!-- Risk factors -->
+        <div id="risk-factors-container" style="display:none;">
+            <h3 class="text-sm text-slate-400 mb-2">Risk Factors</h3>
+            <ul id="risk-factors-list" class="text-xs text-slate-300 space-y-1 mb-4"></ul>
+        </div>
+
+        <!-- Flagged publications (collapsible) -->
+        <div id="risk-flagged-container" style="display:none;">
+            <button onclick="document.getElementById('risk-flagged-table').classList.toggle('hidden')"
+                    class="text-xs text-amber-400 hover:text-amber-300 mb-2">
+                Toggle Flagged Publications
+            </button>
+            <table id="risk-flagged-table" class="hidden w-full text-xs text-left">
+                <thead>
+                    <tr class="text-slate-400 border-b border-slate-700">
+                        <th class="py-2 px-2">ID</th>
+                        <th class="py-2 px-2">Title</th>
+                        <th class="py-2 px-2">ASIN</th>
+                        <th class="py-2 px-2">Status</th>
+                        <th class="py-2 px-2">$ at Risk</th>
+                        <th class="py-2 px-2">Issues</th>
+                    </tr>
+                </thead>
+                <tbody id="risk-flagged-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pending Review -->
+    <div class="max-w-7xl mx-auto card p-5 mb-8" style="border-color: #d97706;">
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center gap-3">
+                <h2 class="text-lg font-semibold text-white">Pending Review</h2>
+                <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-white" id="review-count">0</span>
+            </div>
+            <button class="btn btn-green text-sm" onclick="batchApproveAll()">Batch Approve All</button>
+        </div>
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+            <table>
+                <thead class="sticky top-0" style="background: #1e293b;">
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Niche</th>
+                        <th>Interior</th>
+                        <th>Trim</th>
+                        <th>Pages</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="review-tbody"></tbody>
+            </table>
         </div>
     </div>
 
@@ -183,6 +295,33 @@
                     </tr>
                 </thead>
                 <tbody id="pubs-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="max-w-7xl mx-auto card p-5 mb-8" style="border-color: #3b82f6;">
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center gap-3">
+                <h2 class="text-lg font-semibold text-white">Recommendations</h2>
+                <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-500 text-white" id="recommendations-count">0</span>
+            </div>
+        </div>
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+            <table>
+                <thead class="sticky top-0" style="background: #1e293b;">
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>ASIN</th>
+                        <th>Marketplace</th>
+                        <th>Recommendation</th>
+                        <th>Confidence</th>
+                        <th>Reasons</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="recommendations-tbody"></tbody>
             </table>
         </div>
     </div>
@@ -266,6 +405,7 @@
                 document.getElementById('m-total-variants').textContent = m.total_variants;
                 document.getElementById('m-published').textContent = m.total_published;
                 document.getElementById('m-ready').textContent = m.total_ready;
+                document.getElementById('m-pending-review').textContent = m.total_pending_review;
                 document.getElementById('m-revenue').textContent = '$' + m.estimated_monthly_revenue.toLocaleString('en', {minimumFractionDigits: 2});
                 document.getElementById('m-annual').textContent = '$' + m.estimated_annual_revenue.toLocaleString('en', {minimumFractionDigits: 2});
                 document.getElementById('m-niches').textContent = m.total_niches;
@@ -357,6 +497,189 @@
             } catch(e) { console.error('Publications error:', e); }
         }
 
+        // --- Pending Review ---
+        async function loadPendingReview() {
+            try {
+                const res = await fetch('/api/pending-review');
+                const items = await res.json();
+                document.getElementById('review-count').textContent = items.length;
+                const tbody = document.getElementById('review-tbody');
+                if (items.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-500 py-4">No variants pending review</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = items.map(v => `
+                    <tr class="hover:bg-slate-700/30">
+                        <td class="text-slate-400">#${v.id}</td>
+                        <td class="font-medium text-white">${v.title}</td>
+                        <td class="text-slate-400">${v.niche || '—'}</td>
+                        <td class="text-slate-400">${v.interior_type || '—'}</td>
+                        <td class="text-slate-400">${v.trim_size || '—'}</td>
+                        <td class="text-slate-400">${v.page_count || '—'}</td>
+                        <td class="flex gap-2">
+                            <button class="btn btn-green text-xs py-1 px-2" onclick="approveVariant(${v.id})">Approve</button>
+                            <button class="btn btn-red text-xs py-1 px-2" onclick="rejectVariant(${v.id})">Reject</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) { console.error('Pending review error:', e); }
+        }
+
+        async function approveVariant(id) {
+            try {
+                addLog(`Approving variant #${id}...`);
+                const res = await fetch(`/api/pending-review/${id}/approve`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const r = await res.json();
+                addLog(`Variant #${id} approved`, 'success');
+                showToast(`Variant #${id} approved`);
+                loadPendingReview();
+                loadMetrics();
+                loadVariants();
+            } catch(e) {
+                addLog(`Approve error: ${e.message}`, 'error');
+                showToast('Error approving variant', 'error');
+            }
+        }
+
+        async function rejectVariant(id) {
+            try {
+                addLog(`Rejecting variant #${id}...`);
+                const res = await fetch(`/api/pending-review/${id}/reject`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const r = await res.json();
+                addLog(`Variant #${id} rejected`, 'success');
+                showToast(`Variant #${id} rejected`);
+                loadPendingReview();
+                loadMetrics();
+                loadVariants();
+            } catch(e) {
+                addLog(`Reject error: ${e.message}`, 'error');
+                showToast('Error rejecting variant', 'error');
+            }
+        }
+
+        async function batchApproveAll() {
+            try {
+                addLog('Batch approving all pending variants...');
+                const res = await fetch('/api/pending-review/batch-approve', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const r = await res.json();
+                addLog(`Batch approve: ${r.approved || 0} variants approved`, 'success');
+                showToast(`Batch approved ${r.approved || 0} variants`);
+                loadPendingReview();
+                loadMetrics();
+                loadVariants();
+            } catch(e) {
+                addLog(`Batch approve error: ${e.message}`, 'error');
+                showToast('Error in batch approve', 'error');
+            }
+        }
+
+        // --- Recommendations ---
+        async function loadRecommendations() {
+            try {
+                const res = await fetch('/api/recommendations');
+                const items = await res.json();
+                document.getElementById('recommendations-count').textContent = items.length;
+                const tbody = document.getElementById('recommendations-tbody');
+                if (items.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-4">No recommendations available</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = items.map(r => {
+                    const badgeClass = r.recommendation === 'scale' ? 'badge-scale' : r.recommendation === 'iterate' ? 'badge-iterate' : 'badge-kill';
+                    const reasons = Array.isArray(r.reasons) ? r.reasons.join(', ') : (r.reasons || '—');
+                    return `
+                    <tr class="hover:bg-slate-700/30">
+                        <td class="text-slate-400">#${r.id}</td>
+                        <td class="font-medium text-white">${r.title}</td>
+                        <td class="text-slate-400">${r.asin || '—'}</td>
+                        <td class="text-slate-400">${r.marketplace || '—'}</td>
+                        <td><span class="px-2 py-0.5 rounded text-xs ${badgeClass}">${r.recommendation}</span></td>
+                        <td class="text-slate-400">${r.confidence != null ? r.confidence + '%' : '—'}</td>
+                        <td class="text-slate-400 text-xs">${reasons}</td>
+                        <td>
+                            <div class="flex gap-1 items-center flex-wrap">
+                                <button class="btn btn-green text-xs py-1 px-2" onclick="acceptRecommendation(${r.id})">Accept</button>
+                                <select class="bg-slate-700 text-white rounded px-1 py-1 border border-slate-600 text-xs" onchange="if(this.value) { overrideDecision(${r.id}, this.value); this.value=''; }">
+                                    <option value="">Override...</option>
+                                    <option value="scale">Scale</option>
+                                    <option value="iterate">Iterate</option>
+                                    <option value="kill">Kill</option>
+                                </select>
+                                <button class="btn btn-amber text-xs py-1 px-2" onclick="snoozePublication(${r.id})">Snooze</button>
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('');
+            } catch(e) { console.error('Recommendations error:', e); }
+        }
+
+        async function acceptRecommendation(pubId) {
+            try {
+                addLog(`Accepting recommendation for publication #${pubId}...`);
+                const res = await fetch(`/api/decide/${pubId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({decision: 'accept'})
+                });
+                const r = await res.json();
+                addLog(`Recommendation accepted for #${pubId}`, 'success');
+                showToast(`Recommendation accepted for #${pubId}`);
+                loadRecommendations();
+                loadPublications();
+                loadMetrics();
+            } catch(e) {
+                addLog(`Accept recommendation error: ${e.message}`, 'error');
+                showToast('Error accepting recommendation', 'error');
+            }
+        }
+
+        async function overrideDecision(pubId, decision) {
+            try {
+                addLog(`Overriding decision for #${pubId} to ${decision}...`);
+                const res = await fetch(`/api/decide/${pubId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({decision: decision})
+                });
+                const r = await res.json();
+                addLog(`Decision overridden for #${pubId}: ${decision}`, 'success');
+                showToast(`Decision for #${pubId} set to ${decision}`);
+                loadRecommendations();
+                loadPublications();
+                loadMetrics();
+            } catch(e) {
+                addLog(`Override error: ${e.message}`, 'error');
+                showToast('Error overriding decision', 'error');
+            }
+        }
+
+        async function snoozePublication(pubId) {
+            try {
+                addLog(`Snoozing publication #${pubId} for 7 days...`);
+                const res = await fetch(`/api/decide/${pubId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({decision: 'snooze', snooze_days: 7})
+                });
+                const r = await res.json();
+                addLog(`Publication #${pubId} snoozed for 7 days`, 'success');
+                showToast(`Publication #${pubId} snoozed`);
+                loadRecommendations();
+            } catch(e) {
+                addLog(`Snooze error: ${e.message}`, 'error');
+                showToast('Error snoozing publication', 'error');
+            }
+        }
+
         // --- Actions ---
         function addLog(msg, type = 'info') {
             const log = document.getElementById('action-log');
@@ -390,7 +713,7 @@
                 const res = await fetch('/api/flood', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({target: 15, dry_run: dryRun})
+                    body: JSON.stringify({target: 3, dry_run: dryRun})
                 });
                 const r = await res.json();
                 addLog(`Flood completado: ${r.variants_created} variantes, ${r.interiors_generated} interiores, ${r.covers_generated} covers, ${r.packages_ready} paquetes`, 'success');
@@ -405,33 +728,32 @@
             }
 
             btn.disabled = false;
-            btn.innerHTML = dryRun ? 'Flood Dry Run' : 'Flood (15 libros)';
+            btn.innerHTML = dryRun ? 'Generate Dry Run' : 'Generate (3 books)';
         }
 
-        async function runAutoKill() {
-            const btn = document.getElementById('btn-kill');
+        async function runEvaluate() {
+            const btn = document.getElementById('btn-evaluate');
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Ejecutando...';
-            addLog('Ejecutando auto-kill (21 dias)...');
+            btn.innerHTML = '<span class="spinner"></span> Evaluating...';
+            addLog('Running evaluation...');
 
             try {
-                const res = await fetch('/api/auto-kill', {
+                const res = await fetch('/api/evaluate', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({days: 21})
+                    headers: {'Content-Type': 'application/json'}
                 });
                 const r = await res.json();
-                addLog(`Auto-kill: ${r.checked} revisados, ${r.killed} eliminados, ${r.spared} salvados`, 'success');
+                addLog(`Evaluate: ${r.evaluated || 0} publications evaluated`, 'success');
                 if (r.details) r.details.forEach(d => addLog(d, d.includes('KILL') ? 'error' : 'success'));
-                showToast(`Auto-kill: ${r.killed} eliminados`);
+                showToast(`Evaluation complete: ${r.evaluated || 0} evaluated`);
                 loadAll();
             } catch(e) {
-                addLog(`Auto-kill error: ${e.message}`, 'error');
-                showToast('Error en auto-kill', 'error');
+                addLog(`Evaluate error: ${e.message}`, 'error');
+                showToast('Error running evaluation', 'error');
             }
 
             btn.disabled = false;
-            btn.innerHTML = 'Auto-Kill (21d)';
+            btn.innerHTML = 'Evaluate';
         }
 
         async function runSeries(pubId) {
@@ -512,13 +834,115 @@
             btn.innerHTML = 'Lanzar Deploy';
         }
 
+        // --- 5.4.8 Risk Monitor ---
+        const RISK_COLORS = {low: '#059669', medium: '#d97706', high: '#dc2626', critical: '#dc2626', unknown: '#6b7280', clear: '#059669'};
+        const RISK_BORDERS = {low: '#374151', medium: '#d97706', high: '#dc2626', critical: '#dc2626', unknown: '#374151', clear: '#374151'};
+
+        async function loadRisk() {
+            try {
+                const res = await fetch('/api/risk');
+                const r = await res.json();
+
+                // Badge & card border
+                const badge = document.getElementById('risk-badge');
+                badge.textContent = r.risk_level;
+                badge.style.backgroundColor = RISK_COLORS[r.risk_level] || '#6b7280';
+                badge.style.color = '#fff';
+                document.getElementById('risk-card').style.borderColor = RISK_BORDERS[r.risk_level] || '#374151';
+
+                // Financial exposure
+                document.getElementById('risk-unpaid').textContent = r.total_estimated_unpaid.toLocaleString(undefined, {maximumFractionDigits: 0});
+                document.getElementById('risk-at-risk').textContent = r.total_at_risk.toLocaleString(undefined, {maximumFractionDigits: 0});
+                const atRiskEl = document.getElementById('risk-at-risk-val');
+                atRiskEl.style.color = r.total_at_risk > 0 ? '#dc2626' : '#fff';
+                document.getElementById('risk-exposure').textContent = (r.exposure_ratio * 100).toFixed(1);
+                const expEl = document.getElementById('risk-exposure-val');
+                expEl.style.color = r.exposure_ratio > 0.5 ? '#dc2626' : r.exposure_ratio > 0.2 ? '#d97706' : '#059669';
+
+                // Risk level display
+                const rlEl = document.getElementById('risk-level-display');
+                rlEl.textContent = r.risk_level.toUpperCase();
+                rlEl.style.color = RISK_COLORS[r.risk_level] || '#6b7280';
+
+                // Velocity
+                document.getElementById('risk-vel-7d').textContent = r.velocity_7d;
+                document.getElementById('risk-vel-30d').textContent = r.velocity_30d;
+                const velStatus = document.getElementById('risk-vel-status');
+                velStatus.textContent = r.velocity_alert ? 'HIGH' : 'normal';
+                velStatus.style.color = r.velocity_alert ? '#dc2626' : '#059669';
+
+                // Compliance counts
+                document.getElementById('risk-compliant').textContent = r.compliant_count;
+                document.getElementById('risk-flagged').textContent = r.flagged_count;
+                document.getElementById('risk-blocked').textContent = r.blocked_count;
+
+                // Similarity
+                document.getElementById('risk-sim-max').textContent = (r.max_catalog_similarity * 100).toFixed(0);
+                document.getElementById('risk-sim-clusters').textContent = r.similar_clusters;
+
+                // Risk factors
+                const factorsContainer = document.getElementById('risk-factors-container');
+                const factorsList = document.getElementById('risk-factors-list');
+                if (r.risk_factors && r.risk_factors.length > 0) {
+                    factorsContainer.style.display = '';
+                    factorsList.innerHTML = r.risk_factors.map(f => `<li class="text-amber-300">• ${f}</li>`).join('');
+                } else {
+                    factorsContainer.style.display = 'none';
+                }
+
+                // Flagged publications
+                const flaggedContainer = document.getElementById('risk-flagged-container');
+                const flaggedTbody = document.getElementById('risk-flagged-tbody');
+                if (r.flagged_publications && r.flagged_publications.length > 0) {
+                    flaggedContainer.style.display = '';
+                    flaggedTbody.innerHTML = r.flagged_publications.map(p => `
+                        <tr class="border-b border-slate-800">
+                            <td class="py-1 px-2 text-slate-300">#${p.pub_id}</td>
+                            <td class="py-1 px-2 text-white">${p.title || '--'}</td>
+                            <td class="py-1 px-2 text-slate-400">${p.asin || '--'}</td>
+                            <td class="py-1 px-2">
+                                <span class="${p.status === 'blocked' ? 'text-red-400' : 'text-amber-400'}">${p.status}</span>
+                            </td>
+                            <td class="py-1 px-2 text-red-300">$${(p.revenue_at_risk || 0).toFixed(0)}</td>
+                            <td class="py-1 px-2 text-slate-400">${(p.issues || []).map(i => i.name).join(', ') || '--'}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    flaggedContainer.style.display = 'none';
+                }
+
+            } catch(e) {
+                addLog(`Risk assessment error: ${e.message}`, 'error');
+            }
+        }
+
+        async function runComplianceScan() {
+            try {
+                addLog('Running full compliance scan...');
+                const res = await fetch('/api/compliance/scan', {method: 'POST'});
+                const r = await res.json();
+                addLog(`Compliance scan complete: ${r.risk_level} risk, ${r.flagged_count} flagged, ${r.blocked_count} blocked`,
+                       r.risk_level === 'low' || r.risk_level === 'clear' ? 'success' : 'warning');
+                showToast(`Risk level: ${r.risk_level.toUpperCase()}`);
+                loadRisk();
+                loadPublications();
+                loadMetrics();
+            } catch(e) {
+                addLog(`Compliance scan error: ${e.message}`, 'error');
+                showToast('Error running compliance scan', 'error');
+            }
+        }
+
         // --- Load All ---
         function loadAll() {
             loadMetrics();
             loadNiches();
             loadVariants();
             loadPublications();
+            loadPendingReview();
+            loadRecommendations();
             loadDeployStatus();
+            loadRisk();
         }
 
         // Initial load

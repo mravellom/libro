@@ -19,10 +19,24 @@ class DottedTemplate(InteriorTemplate):
         dot_color: tuple = (0.75, 0.75, 0.75),
         page_numbers: bool = True,
     ):
-        self.dot_spacing = dot_spacing
-        self.dot_radius = dot_radius
-        self.dot_color = Color(*dot_color)
+        super().__init__()
+        self._default_dot_spacing = dot_spacing
+        self._default_dot_radius = dot_radius
+        self._default_dot_color = dot_color
         self.page_numbers = page_numbers
+
+    @property
+    def dot_spacing(self) -> float:
+        return self.style.dot_spacing if self.style else self._default_dot_spacing
+
+    @property
+    def dot_radius(self) -> float:
+        return self.style.dot_radius if self.style else self._default_dot_radius
+
+    @property
+    def dot_color(self) -> Color:
+        c = self.style.dot_color if self.style else self._default_dot_color
+        return Color(*c)
 
     def draw_page(self, c: Canvas, page_num: int, trim: TrimSize) -> None:
         c.setFillColor(self.dot_color)
@@ -38,6 +52,4 @@ class DottedTemplate(InteriorTemplate):
 
         # Page number
         if self.page_numbers:
-            c.setFont("Helvetica", 8)
-            c.setFillColor(Color(0.6, 0.6, 0.6))
-            c.drawCentredString(trim.width / 2, trim.content_bottom - 15, str(page_num))
+            self._draw_page_number(c, page_num, trim)

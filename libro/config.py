@@ -70,13 +70,31 @@ class Settings(BaseSettings):
     similarity_max_similar_active: int = _yaml.get("similarity_max_similar_active", 3)
 
     # Strategy — Flooding
-    flood_daily_target: int = _yaml.get("flood_daily_target", 15)
+    flood_daily_target: int = _yaml.get("flood_daily_target", 3)
+    flood_max_daily_target: int = _yaml.get("flood_max_daily_target", 5)
     flood_evergreen_ratio: float = _yaml.get("flood_evergreen_ratio", 0.7)
     flood_trending_ratio: float = _yaml.get("flood_trending_ratio", 0.3)
     max_bsr_threshold: int = _yaml.get("max_bsr_threshold", 300_000)
 
-    # Strategy — Auto-kill
-    auto_kill_days: int = _yaml.get("auto_kill_days", 21)
+    # Human review gate
+    require_human_review: bool = _yaml.get("require_human_review", True)
+
+    # Strategy — Evaluation (advisory, replaces auto-kill)
+    evaluation_min_days: int = _yaml.get("evaluation_min_days", 21)
+    auto_apply_decisions: bool = _yaml.get("auto_apply_decisions", False)
+    default_snooze_days: int = _yaml.get("default_snooze_days", 7)
+
+    # Backward compat alias
+    @property
+    def auto_kill_days(self) -> int:
+        return self.evaluation_min_days
+
+    # Compliance (5.4.8 risk prevention)
+    compliance_velocity_7d_max: int = _yaml.get("compliance_velocity_7d_max", 10)
+    compliance_velocity_30d_max: int = _yaml.get("compliance_velocity_30d_max", 30)
+    compliance_similarity_threshold: float = _yaml.get("compliance_similarity_threshold", 0.85)
+    compliance_max_similar_catalog: int = _yaml.get("compliance_max_similar_catalog", 5)
+    compliance_recheck_days: int = _yaml.get("compliance_recheck_days", 7)
 
     # Strategy — Marketplaces
     marketplaces: list[str] = _yaml.get("marketplaces", ["com", "de", "co.jp"])

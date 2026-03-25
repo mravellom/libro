@@ -1,0 +1,76 @@
+=== Libro Daily Flood — mar 24 mar 2026 06:00:01 -03 ===
+
+Flood Pipeline LIVE
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+
+Results:
+  Niches processed:    15
+  Variants created:    4
+  Interiors generated: 4
+  Covers generated:    4
+  Packages ready:      4
+
+  Errors (11):
+    → address book: no variants created (similarity guard)
+    → yoga journal: no variants created (similarity guard)
+    → budget planner: no variants created (similarity guard)
+    → hiking journal: no variants created (similarity guard)
+    → income tracker: no variants created (similarity guard)
+    → self care journal: no variants created (similarity guard)
+    → expense tracker: no variants created (similarity guard)
+    → time management planner: no variants created (similarity guard)
+    → goal planner: no variants created (similarity guard)
+    → to do list notebook: no variants created (similarity guard)
+    → income tracker: no variants created (similarity guard)
+2026-03-24 06:00:03,984 [INFO] libro.tracking.cron: Cron tick started at 2026-03-24T09:00:03.984223
+2026-03-24 06:00:04,012 [INFO] libro.tracking.monitor: No active publications to track
+2026-03-24 06:00:04,012 [INFO] libro.tracking.cron: Cron tick complete: 0 snapshots captured
+Cron tick complete: 0 snapshots
+=== Done — mar 24 mar 2026 06:00:04 -03 ===
+=== Libro Daily Flood — mié 25 mar 2026 06:00:01 -03 ===
+
+Flood Pipeline LIVE
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+Skipping variant: BLOCKED: 3 similar titles already exist (max 3). Amazon may flag this as duplicate content.
+
+Results:
+  Niches processed:    15
+  Variants created:    5
+  Interiors generated: 5
+  Covers generated:    5
+  Packages ready:      5
+
+  Errors (10):
+    → weight loss tracker: no variants created (similarity guard)
+    → vehicle maintenance log: no variants created (similarity guard)
+    → daily planner undated: no variants created (similarity guard)
+    → running log: no variants created (similarity guard)
+    → time management planner: no variants created (similarity guard)
+    → sight words practice: no variants created (similarity guard)
+    → fitness logbook: no variants created (similarity guard)
+    → fishing log: no variants created (similarity guard)
+    → vehicle maintenance log: no variants created (similarity guard)
+    → weekly planner: no variants created (similarity guard)
+2026-03-25 06:00:20,046 [INFO] libro.tracking.cron: Cron tick started at 2026-03-25T09:00:20.046517
+2026-03-25 06:00:20,083 [INFO] libro.tracking.monitor: No active publications to track
+2026-03-25 06:00:20,083 [INFO] libro.tracking.cron: Cron tick complete: 0 snapshots captured
+Cron tick complete: 0 snapshots
+=== Done — mié 25 mar 2026 06:00:20 -03 ===

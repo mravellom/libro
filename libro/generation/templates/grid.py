@@ -19,10 +19,24 @@ class GridTemplate(InteriorTemplate):
         line_width: float = 0.3,
         page_numbers: bool = True,
     ):
-        self.cell_size = cell_size
-        self.line_color = Color(*line_color)
-        self.line_width = line_width
+        super().__init__()
+        self._default_cell_size = cell_size
+        self._default_line_color = line_color
+        self._default_line_width = line_width
         self.page_numbers = page_numbers
+
+    @property
+    def cell_size(self) -> float:
+        return self.style.cell_size if self.style else self._default_cell_size
+
+    @property
+    def line_color(self) -> Color:
+        c = self.style.line_color if self.style else self._default_line_color
+        return Color(*c)
+
+    @property
+    def line_width(self) -> float:
+        return self.style.line_width if self.style else self._default_line_width
 
     def draw_page(self, c: Canvas, page_num: int, trim: TrimSize) -> None:
         c.setStrokeColor(self.line_color)
@@ -42,6 +56,4 @@ class GridTemplate(InteriorTemplate):
 
         # Page number
         if self.page_numbers:
-            c.setFont("Helvetica", 8)
-            c.setFillColor(Color(0.6, 0.6, 0.6))
-            c.drawCentredString(trim.width / 2, trim.content_bottom - 15, str(page_num))
+            self._draw_page_number(c, page_num, trim)

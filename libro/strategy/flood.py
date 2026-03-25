@@ -50,6 +50,7 @@ def flood_pipeline(
 
     settings = get_settings()
     target = daily_target or settings.flood_daily_target
+    target = min(target, settings.flood_max_daily_target)
     ev_ratio = evergreen_ratio or settings.flood_evergreen_ratio
 
     result = FloodResult()
@@ -104,7 +105,41 @@ def flood_pipeline(
             log.error(f"Error processing niche '{keyword}': {e}")
             result.errors.append(f"{keyword}: {e}")
 
+    # Velocity warning (5.4.8 compliance)
+    _check_velocity_warning(session, settings)
+
     return result
+
+
+def _check_velocity_warning(session: Session, settings) -> None:
+    """Log a warning if publishing velocity exceeds compliance thresholds."""
+    from datetime import datetime, timedelta
+    from libro.models.publication import Publication
+
+    now = datetime.utcnow()
+    count_7d = (
+        session.query(Publication)
+        .filter(Publication.published_at >= now - timedelta(days=7))
+        .count()
+    )
+    count_30d = (
+        session.query(Publication)
+        .filter(Publication.published_at >= now - timedelta(days=30))
+        .count()
+    )
+
+    if count_7d > settings.compliance_velocity_7d_max:
+        log.warning(
+            f"5.4.8 VELOCITY ALERT: {count_7d} publications in 7 days "
+            f"(threshold: {settings.compliance_velocity_7d_max}). "
+            "Review publishing pace to avoid spam classification."
+        )
+    if count_30d > settings.compliance_velocity_30d_max:
+        log.warning(
+            f"5.4.8 VELOCITY ALERT: {count_30d} publications in 30 days "
+            f"(threshold: {settings.compliance_velocity_30d_max}). "
+            "Review publishing pace to avoid spam classification."
+        )
 
 
 def _process_niche(
@@ -157,6 +192,8 @@ def _process_niche(
         chosen_interior = random.choice(interior_types)
         variant.interior_type = chosen_interior
 
+    # Assign seed for unique interior generation
+    variant.interior_seed = variant.id
     session.flush()
 
     # Generate interior PDF
@@ -168,6 +205,7 @@ def _process_niche(
             output_path=interior_path,
             trim_size=variant.trim_size,
             page_count=variant.page_count,
+            seed=variant.interior_seed,
         )
         variant.interior_pdf_path = str(interior_path)
         result.interiors_generated += 1
@@ -208,7 +246,7 @@ def _process_niche(
             font_name=style.font,
         )
         variant.cover_pdf_path = str(cover_path)
-        variant.status = "ready"
+        variant.status = "pending_review" if settings.require_human_review else "ready"
         result.covers_generated += 1
     except Exception as e:
         log.error(f"Cover generation failed for variant #{variant.id}: {e}")

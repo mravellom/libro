@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, func
+from sqlalchemy import ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from libro.database import Base
@@ -30,6 +30,19 @@ class Publication(Base):
     # None | scale | iterate | kill
     decision: Mapped[str | None] = mapped_column(String(20))
     decided_at: Mapped[datetime | None] = mapped_column(default=None)
+
+    # Advisory evaluation (human must confirm)
+    recommended_decision: Mapped[str | None] = mapped_column(String(20), default=None)
+    recommendation_confidence: Mapped[float | None] = mapped_column(default=None)
+    recommendation_reasons: Mapped[str | None] = mapped_column(Text, default=None)
+    recommended_at: Mapped[datetime | None] = mapped_column(default=None)
+    snoozed_until: Mapped[datetime | None] = mapped_column(default=None)
+
+    # Compliance tracking (KDP 5.4.8 risk)
+    compliance_status: Mapped[str | None] = mapped_column(String(20), default=None)
+    compliance_checked_at: Mapped[datetime | None] = mapped_column(default=None)
+    compliance_notes: Mapped[str | None] = mapped_column(Text, default=None)
+    estimated_total_royalties: Mapped[float | None] = mapped_column(default=None)
 
     variant: Mapped["Variant"] = relationship(back_populates="publication")
     snapshots: Mapped[list["TrackingSnapshot"]] = relationship(back_populates="publication")
