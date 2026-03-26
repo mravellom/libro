@@ -4,7 +4,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
@@ -63,6 +63,38 @@ class BatchDecisionRequest(BaseModel):
 async def dashboard(request: Request):
     """Render the main dashboard page."""
     return templates.TemplateResponse(request, "dashboard.html")
+
+
+# --- File Preview ---
+
+@app.get("/api/preview/{variant_id}/interior")
+def preview_interior(variant_id: int):
+    """Serve interior PDF for in-browser preview."""
+    from libro.models.variant import Variant
+    with get_session() as session:
+        variant = session.get(Variant, variant_id)
+        if not variant or not variant.interior_pdf_path:
+            return {"error": "Interior PDF not found"}
+        pdf_path = Path(variant.interior_pdf_path)
+        if not pdf_path.exists():
+            return {"error": f"File not found: {pdf_path}"}
+    return FileResponse(pdf_path, media_type="application/pdf", filename=f"interior_{variant_id}.pdf")
+
+
+@app.get("/api/preview/{variant_id}/cover")
+def preview_cover(variant_id: int):
+    """Serve cover image for preview."""
+    from libro.models.variant import Variant
+    with get_session() as session:
+        variant = session.get(Variant, variant_id)
+        if not variant or not variant.cover_pdf_path:
+            return {"error": "Cover not found"}
+        cover_path = Path(variant.cover_pdf_path)
+        if not cover_path.exists():
+            return {"error": f"File not found: {cover_path}"}
+    suffix = cover_path.suffix.lower()
+    media = "image/png" if suffix == ".png" else "image/jpeg" if suffix in (".jpg", ".jpeg") else "application/pdf"
+    return FileResponse(cover_path, media_type=media, filename=f"cover_{variant_id}{suffix}")
 
 
 # --- API Endpoints ---
@@ -228,6 +260,22 @@ def get_pending_review():
         ]
 
 
+@app.post("/api/review/batch")
+def batch_review(req: BatchReviewRequest):
+    """Approve or reject multiple variants."""
+    from libro.models.variant import Variant
+    results = []
+    with get_session() as session:
+        for vid in req.variant_ids:
+            variant = session.get(Variant, vid)
+            if not variant or variant.status != "pending_review":
+                results.append({"variant_id": vid, "error": "not found or not pending"})
+                continue
+            variant.status = "ready" if req.action == "approve" else "rejected"
+            results.append({"variant_id": vid, "new_status": variant.status})
+    return {"results": results}
+
+
 @app.post("/api/review/{variant_id}")
 def review_variant(variant_id: int, req: ReviewRequest):
     """Approve or reject a variant."""
@@ -247,22 +295,6 @@ def review_variant(variant_id: int, req: ReviewRequest):
             return {"error": f"Invalid action: {req.action}. Use 'approve' or 'reject'"}
 
         return {"variant_id": variant_id, "new_status": variant.status}
-
-
-@app.post("/api/review/batch")
-def batch_review(req: BatchReviewRequest):
-    """Approve or reject multiple variants."""
-    from libro.models.variant import Variant
-    results = []
-    with get_session() as session:
-        for vid in req.variant_ids:
-            variant = session.get(Variant, vid)
-            if not variant or variant.status != "pending_review":
-                results.append({"variant_id": vid, "error": "not found or not pending"})
-                continue
-            variant.status = "ready" if req.action == "approve" else "rejected"
-            results.append({"variant_id": vid, "new_status": variant.status})
-    return {"results": results}
 
 
 # --- Advisory Recommendations ---
@@ -305,39 +337,6 @@ def get_recommendations():
             }
             for p in pubs
         ]
-
-
-@app.post("/api/decide/{pub_id}")
-def decide_publication(pub_id: int, req: DecisionRequest):
-    """Apply a human decision to a publication."""
-    from libro.models.publication import Publication
-    from datetime import datetime, timedelta
-    with get_session() as session:
-        pub = session.get(Publication, pub_id)
-        if not pub:
-            return {"error": f"Publication #{pub_id} not found"}
-
-        if req.decision == "snooze":
-            pub.snoozed_until = datetime.utcnow() + timedelta(days=req.snooze_days)
-            pub.recommended_decision = None
-            pub.recommendation_confidence = None
-            pub.recommendation_reasons = None
-            pub.recommended_at = None
-            return {"pub_id": pub_id, "snoozed_until": pub.snoozed_until.isoformat()}
-
-        # "accept" applies the recommended_decision as the final decision
-        decision = req.decision
-        if decision == "accept":
-            if not pub.recommended_decision:
-                return {"error": f"Publication #{pub_id} has no recommendation to accept"}
-            decision = pub.recommended_decision
-
-        if decision not in ("scale", "iterate", "kill"):
-            return {"error": f"Invalid decision: {decision}"}
-
-        pub.decision = decision
-        pub.decided_at = datetime.utcnow()
-        return {"pub_id": pub_id, "decision": pub.decision}
 
 
 class BatchDecisionRequest(BaseModel):
@@ -383,11 +382,54 @@ def decide_batch(req: BatchDecisionRequest):
     return {"results": results}
 
 
+@app.post("/api/decide/{pub_id}")
+def decide_publication(pub_id: int, req: DecisionRequest):
+    """Apply a human decision to a publication."""
+    from libro.models.publication import Publication
+    from datetime import datetime, timedelta
+    with get_session() as session:
+        pub = session.get(Publication, pub_id)
+        if not pub:
+            return {"error": f"Publication #{pub_id} not found"}
+
+        if req.decision == "snooze":
+            pub.snoozed_until = datetime.utcnow() + timedelta(days=req.snooze_days)
+            pub.recommended_decision = None
+            pub.recommendation_confidence = None
+            pub.recommendation_reasons = None
+            pub.recommended_at = None
+            return {"pub_id": pub_id, "snoozed_until": pub.snoozed_until.isoformat()}
+
+        # "accept" applies the recommended_decision as the final decision
+        decision = req.decision
+        if decision == "accept":
+            if not pub.recommended_decision:
+                return {"error": f"Publication #{pub_id} has no recommendation to accept"}
+            decision = pub.recommended_decision
+
+        if decision not in ("scale", "iterate", "kill"):
+            return {"error": f"Invalid decision: {decision}"}
+
+        pub.decision = decision
+        pub.decided_at = datetime.utcnow()
+        return {"pub_id": pub_id, "decision": pub.decision}
+
+
 # --- KDP 5.4.8 Compliance ---
 
 @app.get("/api/risk")
 def get_risk_assessment():
     """Get portfolio-level 5.4.8 risk assessment."""
+    from libro.strategy.compliance import assess_portfolio_risk
+    from dataclasses import asdict
+    with get_session() as session:
+        risk = assess_portfolio_risk(session)
+        return asdict(risk)
+
+
+@app.post("/api/compliance/scan")
+def run_compliance_scan():
+    """Trigger full portfolio compliance scan."""
     from libro.strategy.compliance import assess_portfolio_risk
     from dataclasses import asdict
     with get_session() as session:
@@ -411,16 +453,6 @@ def get_compliance_check(variant_id: int):
                 for c in result.checks
             ],
         }
-
-
-@app.post("/api/compliance/scan")
-def run_compliance_scan():
-    """Trigger full portfolio compliance scan."""
-    from libro.strategy.compliance import assess_portfolio_risk
-    from dataclasses import asdict
-    with get_session() as session:
-        risk = assess_portfolio_risk(session)
-        return asdict(risk)
 
 
 # --- KDP Deploy Pipeline ---

@@ -1,62 +1,41 @@
-"""Variant engine — creates data-driven book variants from niche analysis."""
+"""Variant engine — creates market-aware book variants from niche analysis.
+
+Uses buyer personas, competitor keyword analysis, and the title engine
+to generate variants with compelling titles, targeted descriptions,
+and optimized keywords — not just mechanical combinations.
+"""
 
 import logging
-from itertools import product as itertools_product
 
 from sqlalchemy.orm import Session
 
 from libro.common.similarity import check_similarity, content_fingerprint
 from libro.config import get_settings
+from libro.generation.personas import Persona, get_personas_for_niche
+from libro.generation.title_engine import generate_title
 from libro.models.niche import Niche
 from libro.models.product import Product
 from libro.models.variant import Variant
 
 log = logging.getLogger(__name__)
 
-# Title patterns commonly used in low-content KDP books
-TITLE_PATTERNS = [
-    "{keyword}: A Daily Journal for {audience}",
-    "{keyword} Notebook: {time_frame} Guide to {benefit}",
-    "{keyword} for {audience}: {time_frame} {type} Journal",
-    "The {time_frame} {keyword} Journal: {benefit}",
-    "My {keyword} Journal: A {type} Notebook for {audience}",
-]
-
-AUDIENCES = [
-    "Women", "Men", "Teens", "Adults",
-    "Beginners", "Self-Care Enthusiasts",
-]
-
-TIME_FRAMES = [
-    "Daily", "52-Week", "90-Day", "5-Minute", "365-Day",
-]
-
-BENEFITS = [
-    "Mindfulness and Positivity",
-    "Self-Discovery and Growth",
-    "Reflection and Inner Peace",
-    "Building Better Habits",
-    "Finding Joy Every Day",
-]
-
 
 def generate_variants(
     session: Session,
     niche_id: int,
     count: int = 3,
+    tier: str = "scout",
 ) -> list[Variant]:
-    """Create diverse book variants for a niche.
+    """Create diverse, market-aware book variants for a niche.
 
-    Analyzes existing products in the niche to inform:
-    - Which trim sizes sell best
-    - Which interior types to use
-    - Title patterns that work
-    - Keywords to target
+    Each variant targets a specific buyer persona with a compelling title,
+    tailored description, and optimized keywords.
 
     Args:
         session: DB session.
         niche_id: Niche to generate variants for.
         count: Number of variants to create.
+        tier: "scout" for quick test variants, "hero" for premium variants.
 
     Returns:
         List of created Variant records.
@@ -72,16 +51,21 @@ def generate_variants(
         .all()
     )
 
-    # Analyze competitors to inform variant creation
+    # Analyze competitors for market intelligence
     analysis = _analyze_competitors(products)
+    competitor_keywords = _extract_competitor_keywords(products)
+
+    # Get relevant personas for this niche
+    personas = get_personas_for_niche(niche.keyword)
 
     # Generate diverse combinations
-    variants_data = _create_variant_combos(niche, analysis, count)
+    variants_data = _create_variant_combos(
+        niche, analysis, personas, competitor_keywords, count, tier,
+    )
 
     # Create variants with similarity guard
     created: list[Variant] = []
     for vdata in variants_data:
-        # Check similarity
         warnings = check_similarity(
             session,
             vdata["title"],
@@ -123,7 +107,6 @@ def generate_variants(
         # Assign interior seeds after flush (variant IDs now assigned)
         for v in created:
             v.interior_seed = v.id
-            # Update fingerprint to include seed
             v.content_fingerprint = content_fingerprint(
                 v.title, v.interior_type, v.trim_size, seed=v.interior_seed
             )
@@ -147,7 +130,6 @@ def _analyze_competitors(products: list[Product]) -> dict:
     # Most common dimensions
     dims = [p.dimensions for p in products if p.dimensions]
     if dims:
-        # Map common Amazon dimensions to KDP trim sizes
         for d in dims:
             if "6" in d and "9" in d:
                 analysis["popular_trim"] = "6x9"
@@ -172,71 +154,80 @@ def _analyze_competitors(products: list[Product]) -> dict:
     return analysis
 
 
+def _extract_competitor_keywords(products: list[Product]) -> list[str]:
+    """Extract keyword insights from competitor titles using the keyword analyzer."""
+    titles = [p.title for p in products if p.title]
+    if not titles:
+        return []
+
+    try:
+        from libro.intelligence.keyword_analyzer import analyze_titles
+        insight = analyze_titles(titles)
+        return insight.suggested_keywords
+    except Exception:
+        return []
+
+
 def _create_variant_combos(
-    niche: Niche, analysis: dict, count: int
+    niche: Niche,
+    analysis: dict,
+    personas: list[Persona],
+    competitor_keywords: list[str],
+    count: int,
+    tier: str,
 ) -> list[dict]:
-    """Create diverse variant configurations."""
+    """Create diverse variant configurations using personas and the title engine."""
     keyword = niche.keyword
     variants = []
 
-    # Interior types to cycle through
-    interior_types = ["lined", "dotted", "gratitude", "planner", "grid"]
     trim_sizes = [analysis["popular_trim"]]
     if analysis["popular_trim"] != "6x9":
         trim_sizes.append("6x9")
 
-    # Page count options
     page_counts = analysis.get("popular_page_counts", [120])
     if 120 not in page_counts:
         page_counts.append(120)
 
+    # Use competitor avg_price to inform page count selection
+    # Higher competitor prices → we can justify more pages
+    avg_price = analysis.get("avg_price", 9.99)
+
     for i in range(count):
-        interior = interior_types[i % len(interior_types)]
+        # Cycle through personas for audience diversity
+        persona = personas[i % len(personas)]
+
+        # Pick interior type from persona preferences
+        interior = persona.preferred_interiors[i % len(persona.preferred_interiors)]
+
         trim = trim_sizes[i % len(trim_sizes)]
         pages = page_counts[i % len(page_counts)]
-        audience = AUDIENCES[i % len(AUDIENCES)]
-        time_frame = TIME_FRAMES[i % len(TIME_FRAMES)]
-        benefit = BENEFITS[i % len(BENEFITS)]
-        pattern = TITLE_PATTERNS[i % len(TITLE_PATTERNS)]
 
-        title = pattern.format(
-            keyword=keyword.title(),
-            audience=audience,
-            time_frame=time_frame,
-            benefit=benefit,
-            type=interior.title(),
-        )
+        # Hero tier: use more pages for premium feel
+        if tier == "hero" and pages < 150:
+            pages = 150
 
-        subtitle = f"A {interior.title()} {keyword.title()} Notebook for {audience}"
-
-        # KDP keywords (comma-separated, max 7)
-        kw_parts = keyword.split()
-        keywords_list = [
-            keyword,
-            f"{keyword} for {audience.lower()}",
-            f"{time_frame.lower()} {keyword}",
-            f"{keyword} notebook",
-            f"{keyword} journal",
-            interior + " journal",
-            benefit.lower(),
-        ]
-        keywords = ", ".join(keywords_list[:7])
-
-        description = (
-            f"This beautifully designed {keyword} journal features {pages} pages "
-            f"of {interior} interior in a {trim} format. Perfect for {audience.lower()} "
-            f"looking for {benefit.lower()}. Use it as a {time_frame.lower()} companion "
-            f"for your personal growth journey."
+        # Generate compelling title using the title engine
+        seed = hash(f"{keyword}_{persona.name}_{i}") & 0x7FFFFFFF
+        generated = generate_title(
+            niche_keyword=keyword,
+            persona=persona,
+            seed=seed,
+            interior_type=interior,
+            page_count=pages,
+            trim_size=trim,
+            competitor_keywords=competitor_keywords,
         )
 
         variants.append({
-            "title": title,
-            "subtitle": subtitle,
-            "description": description,
-            "keywords": keywords,
+            "title": generated.title,
+            "subtitle": generated.subtitle,
+            "description": generated.description,
+            "keywords": ", ".join(generated.keywords),
             "interior_type": interior,
             "trim_size": trim,
             "page_count": pages,
+            "persona": persona.name,
+            "tier": tier,
         })
 
     return variants

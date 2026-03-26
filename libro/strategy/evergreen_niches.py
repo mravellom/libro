@@ -14,13 +14,13 @@ EVERGREEN_NICHES: list[tuple[str, list[str]]] = [
     ("bible study journal", ["lined", "dotted"]),
     ("manifestation journal", ["lined", "gratitude"]),
     ("shadow work journal", ["lined", "dotted"]),
-    ("anxiety journal", ["lined", "gratitude"]),
+    ("anxiety journal", ["anxiety", "lined", "gratitude"]),
 
     # Fitness & Health
-    ("fitness logbook", ["grid", "planner"]),
-    ("workout log", ["grid", "planner"]),
+    ("fitness logbook", ["fitness", "grid", "planner"]),
+    ("workout log", ["fitness", "grid", "planner"]),
     ("food diary", ["lined", "planner"]),
-    ("meal planner", ["planner", "grid"]),
+    ("meal planner", ["meal", "planner", "grid"]),
     ("weight loss tracker", ["grid", "planner"]),
     ("yoga journal", ["lined", "dotted"]),
     ("running log", ["grid", "planner"]),
@@ -29,8 +29,8 @@ EVERGREEN_NICHES: list[tuple[str, list[str]]] = [
     ("water intake tracker", ["grid", "planner"]),
 
     # Finance & Business
-    ("budget planner", ["planner", "grid"]),
-    ("expense tracker", ["grid", "planner"]),
+    ("budget planner", ["budget", "planner", "grid"]),
+    ("expense tracker", ["budget", "grid", "planner"]),
     ("savings tracker", ["grid", "planner"]),
     ("bill organizer", ["planner", "grid"]),
     ("debt payoff planner", ["planner", "grid"]),
@@ -40,7 +40,7 @@ EVERGREEN_NICHES: list[tuple[str, list[str]]] = [
 
     # Hobbies & Lifestyle
     ("recipe book blank", ["lined", "grid"]),
-    ("reading log", ["lined", "grid"]),
+    ("reading log", ["reading", "lined", "grid"]),
     ("gardening journal", ["lined", "grid"]),
     ("travel journal", ["lined", "dotted"]),
     ("bird watching log", ["lined", "grid"]),

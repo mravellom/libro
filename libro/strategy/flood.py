@@ -35,9 +35,10 @@ def flood_pipeline(
 ) -> FloodResult:
     """Execute the flooding strategy: produce books at scale.
 
-    1. Select niches (70% evergreen, 30% trending)
+    1. Select niches (60% evergreen, 20% seasonal, 20% trending)
     2. For each niche: generate variants → interior → cover → package
     3. Respect max_bsr_threshold (300K rule)
+    4. Use buyer personas and title engine for market-aware generation
 
     Args:
         session: DB session.
@@ -47,6 +48,7 @@ def flood_pipeline(
         dry_run: If True, only plan without generating files.
     """
     from libro.strategy.evergreen_niches import get_evergreen_sample
+    from libro.generation.niche_enricher import get_seasonal_with_lead_time
 
     settings = get_settings()
     target = daily_target or settings.flood_daily_target
@@ -55,9 +57,10 @@ def flood_pipeline(
 
     result = FloodResult()
 
-    # Calculate split
-    evergreen_count = int(target * ev_ratio)
-    trending_count = target - evergreen_count
+    # Calculate split: evergreen + seasonal + trending
+    evergreen_count = int(target * ev_ratio * 0.75)  # 75% of evergreen slot
+    seasonal_count = int(target * ev_ratio * 0.25)    # 25% of evergreen slot
+    trending_count = target - evergreen_count - seasonal_count
 
     # --- Step 1: Select niches ---
     niches_to_process: list[tuple[str, list[str], str]] = []  # (keyword, interior_types, niche_type)
@@ -66,6 +69,23 @@ def flood_pipeline(
     evergreen_sample = get_evergreen_sample(evergreen_count)
     for keyword, interior_types in evergreen_sample:
         niches_to_process.append((keyword, interior_types, "evergreen"))
+
+    # Seasonal niches (plan 6 weeks ahead for KDP review time)
+    seasonal = get_seasonal_with_lead_time(weeks_ahead=6)
+    if seasonal:
+        seasonal_sample = random.sample(seasonal, min(seasonal_count, len(seasonal)))
+        for keyword, interior_types in seasonal_sample:
+            niches_to_process.append((keyword, interior_types, "evergreen"))
+        # Fill remaining seasonal slots with evergreen
+        if len(seasonal_sample) < seasonal_count:
+            extra_ev = get_evergreen_sample(seasonal_count - len(seasonal_sample))
+            for keyword, interior_types in extra_ev:
+                niches_to_process.append((keyword, interior_types, "evergreen"))
+    else:
+        # No seasonal niches for this period, use evergreen
+        extra_ev = get_evergreen_sample(seasonal_count)
+        for keyword, interior_types in extra_ev:
+            niches_to_process.append((keyword, interior_types, "evergreen"))
 
     # Trending niches from DB (scored, not yet generating)
     trending_niches = (
@@ -88,6 +108,24 @@ def flood_pipeline(
         extra = get_evergreen_sample(trending_count - len(trending_niches))
         for keyword, interior_types in extra:
             niches_to_process.append((keyword, interior_types, "evergreen"))
+
+    # --- Step 1b: Apply feedback loop (filter out bad niches, prefer winners) ---
+    try:
+        from libro.strategy.feedback_loop import get_generation_hints
+        hints = get_generation_hints(session)
+        if hints["data_sufficient"]:
+            avoid = set(hints.get("niches_to_avoid", []))
+            if avoid:
+                before = len(niches_to_process)
+                niches_to_process = [
+                    n for n in niches_to_process
+                    if n[0] not in avoid
+                ]
+                filtered = before - len(niches_to_process)
+                if filtered:
+                    log.info(f"Feedback loop: filtered {filtered} underperforming niches")
+    except Exception as e:
+        log.debug(f"Feedback loop skipped: {e}")
 
     if dry_run:
         result.niches_processed = len(niches_to_process)
@@ -216,22 +254,35 @@ def _process_niche(
 
     # Generate cover
     try:
-        # Get brand style
+        # Get brand style — prefer niche-aware style if no brand specified
         if brand_id:
             brand = session.get(Brand, brand_id)
-            style = BrandStyle.from_brand(brand) if brand else _random_style()
+            style = BrandStyle.from_brand(brand) if brand else _niche_aware_style(keyword)
             author_name = brand.name if brand else ""
         else:
-            # Pick a random existing brand or use random palette
             brand = session.query(Brand).first()
             if brand:
                 style = BrandStyle.from_brand(brand)
                 author_name = brand.name
             else:
-                style = _random_style()
+                style = _niche_aware_style(keyword)
                 author_name = ""
 
         cover_path = output_dir / "cover.png"
+
+        # Try to generate AI background (slow on CPU but high quality)
+        bg_path = None
+        try:
+            from libro.branding.ai_backgrounds import generate_background
+            bg_path = generate_background(
+                variant_id=variant.id,
+                niche_keyword=keyword,
+                output_dir=output_dir,
+                seed=variant.interior_seed or variant.id,
+            )
+        except Exception as e:
+            log.info(f"AI background skipped for #{variant.id}: {e}")
+
         generator = CoverGenerator()
         generator.generate(
             title=variant.title,
@@ -244,6 +295,8 @@ def _process_niche(
             secondary_color=style.secondary_color,
             accent_color=style.accent_color,
             font_name=style.font,
+            seed=variant.interior_seed or variant.id,
+            background_path=bg_path,
         )
         variant.cover_pdf_path = str(cover_path)
         variant.status = "pending_review" if settings.require_human_review else "ready"
@@ -264,6 +317,21 @@ def _process_niche(
         result.errors.append(f"package #{variant.id}: {e}")
 
     session.flush()
+
+
+def _niche_aware_style(keyword: str):
+    """Return a BrandStyle matched to the niche category."""
+    from libro.branding.brand_manager import BrandStyle
+    from libro.branding.niche_styles import get_cover_style_for_niche, get_palette_for_style
+
+    niche_style = get_cover_style_for_niche(keyword)
+    palette = get_palette_for_style(niche_style)
+    return BrandStyle(
+        font=niche_style.font_style,
+        primary_color=palette["primary_color"],
+        secondary_color=palette["secondary_color"],
+        accent_color=palette["accent_color"],
+    )
 
 
 def _random_style():

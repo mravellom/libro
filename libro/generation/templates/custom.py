@@ -207,12 +207,25 @@ def register_templates():
     from libro.generation.templates.lined import LinedTemplate
     from libro.generation.templates.dotted import DottedTemplate
     from libro.generation.templates.grid import GridTemplate
+    from libro.generation.templates.thematic import (
+        AnxietyJournalTemplate,
+        FitnessLogTemplate,
+        BudgetTrackerTemplate,
+        ReadingLogTemplate,
+        MealPlannerTemplate,
+    )
 
     TEMPLATE_REGISTRY["lined"] = LinedTemplate
     TEMPLATE_REGISTRY["dotted"] = DottedTemplate
     TEMPLATE_REGISTRY["grid"] = GridTemplate
     TEMPLATE_REGISTRY["gratitude"] = GratitudeTemplate
     TEMPLATE_REGISTRY["planner"] = DailyPlannerTemplate
+    # Thematic templates with niche-specific content
+    TEMPLATE_REGISTRY["anxiety"] = AnxietyJournalTemplate
+    TEMPLATE_REGISTRY["fitness"] = FitnessLogTemplate
+    TEMPLATE_REGISTRY["budget"] = BudgetTrackerTemplate
+    TEMPLATE_REGISTRY["reading"] = ReadingLogTemplate
+    TEMPLATE_REGISTRY["meal"] = MealPlannerTemplate
 
 
 def get_template(name: str, seed: int | None = None) -> InteriorTemplate:

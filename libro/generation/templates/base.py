@@ -275,7 +275,14 @@ class InteriorTemplate(ABC):
 
         c = Canvas(str(output_path), pagesize=(trim.width, trim.height))
 
-        for page_num in range(1, page_count + 1):
+        # Draw intro pages (title page + how-to-use)
+        from libro.generation.templates.intro_pages import draw_intro_pages
+        intro_count = draw_intro_pages(c, trim, self.name)
+
+        # Remaining pages for content (subtract intro pages)
+        content_pages = max(1, page_count - intro_count)
+
+        for page_num in range(1, content_pages + 1):
             special = self._is_special_page(page_num)
             if special == "divider":
                 self._draw_section_divider(c, trim)

@@ -5,14 +5,14 @@ from pathlib import Path
 
 from PIL import Image
 
-from libro.branding.cover import CoverGenerator, _hex_to_rgb
+from libro.branding.cover import CoverGenerator, _hex
 from libro.common.pdf_utils import get_cover_dimensions
 
 
-def test_hex_to_rgb():
-    assert _hex_to_rgb("#FF0000") == (255, 0, 0)
-    assert _hex_to_rgb("#2D4A3E") == (45, 74, 62)
-    assert _hex_to_rgb("FFFFFF") == (255, 255, 255)
+def test_hex():
+    assert _hex("#FF0000") == (255, 0, 0)
+    assert _hex("#2D4A3E") == (45, 74, 62)
+    assert _hex("FFFFFF") == (255, 255, 255)
 
 
 def test_generate_cover():

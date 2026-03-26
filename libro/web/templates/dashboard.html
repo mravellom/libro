@@ -227,6 +227,7 @@
                         <th>Interior</th>
                         <th>Trim</th>
                         <th>Pages</th>
+                        <th>Preview</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -269,6 +270,7 @@
                             <th>Interior</th>
                             <th>PDF</th>
                             <th>Status</th>
+                            <th>Preview</th>
                         </tr>
                     </thead>
                     <tbody id="variants-tbody"></tbody>
@@ -466,6 +468,10 @@
                         <td class="text-slate-400">${v.interior_type}</td>
                         <td>${v.has_interior && v.has_cover ? '<span class="text-emerald-400">OK</span>' : '<span class="text-yellow-400">parcial</span>'}</td>
                         <td><span class="px-2 py-0.5 rounded text-xs badge-${v.status}">${v.status}</span></td>
+                        <td class="flex gap-1">
+                            ${v.has_interior ? `<button class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded" onclick="window.open('/api/preview/${v.id}/interior','_blank')">PDF</button>` : ''}
+                            ${v.has_cover ? `<button class="text-xs bg-purple-600 hover:bg-purple-500 text-white px-2 py-0.5 rounded" onclick="window.open('/api/preview/${v.id}/cover','_blank')">Cover</button>` : ''}
+                        </td>
                     </tr>
                 `).join('');
             } catch(e) { console.error('Variants error:', e); }
@@ -516,7 +522,11 @@
                         <td class="text-slate-400">${v.interior_type || '—'}</td>
                         <td class="text-slate-400">${v.trim_size || '—'}</td>
                         <td class="text-slate-400">${v.page_count || '—'}</td>
-                        <td class="flex gap-2">
+                        <td class="flex gap-1">
+                            ${v.has_interior ? `<button class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded" onclick="window.open('/api/preview/${v.id}/interior','_blank')">PDF</button>` : ''}
+                            ${v.has_cover ? `<button class="text-xs bg-purple-600 hover:bg-purple-500 text-white px-2 py-0.5 rounded" onclick="window.open('/api/preview/${v.id}/cover','_blank')">Cover</button>` : ''}
+                        </td>
+                        <td class="flex gap-1">
                             <button class="btn btn-green text-xs py-1 px-2" onclick="approveVariant(${v.id})">Approve</button>
                             <button class="btn btn-red text-xs py-1 px-2" onclick="rejectVariant(${v.id})">Reject</button>
                         </td>
@@ -528,9 +538,10 @@
         async function approveVariant(id) {
             try {
                 addLog(`Approving variant #${id}...`);
-                const res = await fetch(`/api/pending-review/${id}/approve`, {
+                const res = await fetch(`/api/review/${id}`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'approve'})
                 });
                 const r = await res.json();
                 addLog(`Variant #${id} approved`, 'success');
@@ -547,9 +558,10 @@
         async function rejectVariant(id) {
             try {
                 addLog(`Rejecting variant #${id}...`);
-                const res = await fetch(`/api/pending-review/${id}/reject`, {
+                const res = await fetch(`/api/review/${id}`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'reject'})
                 });
                 const r = await res.json();
                 addLog(`Variant #${id} rejected`, 'success');
@@ -566,13 +578,18 @@
         async function batchApproveAll() {
             try {
                 addLog('Batch approving all pending variants...');
-                const res = await fetch('/api/pending-review/batch-approve', {
+                // First get all pending IDs
+                const pending = await fetch('/api/pending-review').then(r => r.json());
+                const ids = pending.map(v => v.id);
+                if (ids.length === 0) { showToast('No variants pending'); return; }
+                const res = await fetch('/api/review/batch', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'approve', variant_ids: ids})
                 });
                 const r = await res.json();
-                addLog(`Batch approve: ${r.approved || 0} variants approved`, 'success');
-                showToast(`Batch approved ${r.approved || 0} variants`);
+                addLog(`Batch approve: ${r.results?.length || 0} variants approved`, 'success');
+                showToast(`Batch approved ${r.results?.length || 0} variants`);
                 loadPendingReview();
                 loadMetrics();
                 loadVariants();

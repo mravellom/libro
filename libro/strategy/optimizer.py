@@ -231,7 +231,8 @@ def generate_series(
     Takes a successful book and creates related variants with the same
     aesthetic (brand, colors, style) to enable cross-selling on Amazon.
     """
-    from libro.generation.variant_engine import TITLE_PATTERNS, AUDIENCES, TIME_FRAMES, BENEFITS
+    from libro.generation.title_engine import generate_title
+    from libro.generation.personas import get_personas_for_niche
     from libro.common.similarity import content_fingerprint
 
     result = SeriesResult()
@@ -274,7 +275,7 @@ def generate_series(
     if not expansion_keywords:
         expansion_keywords = [f"{source_niche.keyword} {suffix}" for suffix in ["for beginners", "for women", "for men", "weekly"]]
 
-    # Create variants for related niches
+    # Create variants for related niches using title engine + personas
     for i, exp_keyword in enumerate(expansion_keywords[:count]):
         # Find or create niche for expansion
         exp_niche = session.query(Niche).filter(Niche.keyword == exp_keyword).first()
@@ -288,27 +289,29 @@ def generate_series(
             session.add(exp_niche)
             session.flush()
 
-        # Create variant with same aesthetic as source
-        pattern = TITLE_PATTERNS[i % len(TITLE_PATTERNS)]
-        audience = AUDIENCES[i % len(AUDIENCES)]
-        time_frame = TIME_FRAMES[i % len(TIME_FRAMES)]
-        benefit = BENEFITS[i % len(BENEFITS)]
+        # Use personas and title engine for compelling titles
+        personas = get_personas_for_niche(exp_keyword)
+        persona = personas[i % len(personas)] if personas else personas[0]
+        seed = hash(f"series_{publication_id}_{exp_keyword}_{i}") & 0x7FFFFFFF
 
-        title = pattern.format(
-            keyword=exp_keyword.title(),
-            audience=audience,
-            time_frame=time_frame,
-            benefit=benefit,
-            type=source_variant.interior_type.title(),
+        generated = generate_title(
+            niche_keyword=exp_keyword,
+            persona=persona,
+            seed=seed,
+            interior_type=source_variant.interior_type,
+            page_count=source_variant.page_count,
+            trim_size=source_variant.trim_size,
         )
 
-        fp = content_fingerprint(title, source_variant.interior_type, source_variant.trim_size)
+        fp = content_fingerprint(generated.title, source_variant.interior_type, source_variant.trim_size)
 
         variant = Variant(
             niche_id=exp_niche.id,
             brand_id=source_variant.brand_id,
-            title=title,
-            subtitle=f"A {source_variant.interior_type.title()} {exp_keyword.title()} Notebook",
+            title=generated.title,
+            subtitle=generated.subtitle,
+            description=generated.description,
+            keywords=", ".join(generated.keywords),
             interior_type=source_variant.interior_type,
             trim_size=source_variant.trim_size,
             page_count=source_variant.page_count,
@@ -319,7 +322,7 @@ def generate_series(
         )
         session.add(variant)
         result.variants_created += 1
-        result.details.append(f"Created: {title[:50]}...")
+        result.details.append(f"Created: {generated.title[:50]}...")
 
     session.flush()
     return result
