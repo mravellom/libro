@@ -339,10 +339,6 @@ def get_recommendations():
         ]
 
 
-class BatchDecisionRequest(BaseModel):
-    decisions: list[dict]  # [{"pub_id": int, "decision": str, "snooze_days": int?}]
-
-
 @app.post("/api/decide/batch")
 def decide_batch(req: BatchDecisionRequest):
     """Apply decisions to multiple publications at once."""
@@ -557,3 +553,43 @@ def launch_deploy(req: DeployRequest):
         "limit": limit,
         "message": f"Deploy launched in {terminal} — {limit} books",
     }
+
+
+# --- Templates, Feedback & Seasonal ---
+
+@app.get("/api/templates")
+def get_templates():
+    """List all available interior templates."""
+    from libro.generation.interior import list_templates
+    return list_templates()
+
+
+@app.get("/api/feedback")
+def get_feedback():
+    """Get feedback loop insights."""
+    from libro.strategy.feedback_loop import analyze_performance
+    with get_session() as session:
+        insights = analyze_performance(session)
+    return {
+        "data_sufficient": insights.data_sufficient,
+        "total_analyzed": insights.total_publications_analyzed,
+        "recommended_niches_to_scale": insights.recommended_niches_to_scale,
+        "recommended_niches_to_avoid": insights.recommended_niches_to_avoid,
+        "recommended_interior_types": insights.recommended_interior_types,
+        "top_niches": [
+            {"keyword": n.keyword, "score": n.score, "published": n.published, "scaled": n.scaled, "killed": n.killed}
+            for n in insights.top_niches[:5]
+        ],
+        "interior_rankings": [
+            {"interior_type": it.interior_type, "scale_rate": round(it.scale_rate, 2), "kill_rate": round(it.kill_rate, 2), "total": it.total_published, "avg_revenue": round(it.avg_revenue or 0, 2)}
+            for it in insights.interior_rankings
+        ],
+    }
+
+
+@app.get("/api/seasonal")
+def get_seasonal():
+    """Get upcoming seasonal niches."""
+    from libro.generation.niche_enricher import get_seasonal_with_lead_time
+    niches = get_seasonal_with_lead_time(weeks_ahead=6)
+    return [{"keyword": kw, "interior_types": types} for kw, types in niches]
