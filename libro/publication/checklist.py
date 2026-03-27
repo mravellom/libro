@@ -88,33 +88,49 @@ def _check_title(variant: Variant, result: ChecklistResult) -> None:
 
 
 def _check_interior(variant: Variant, result: ChecklistResult) -> None:
+    from libro.common.pdf_validation import validate_interior
+
     if not variant.interior_pdf_path:
         result.checks.append(CheckResult("Interior PDF", False, "No interior PDF generated"))
         return
 
     path = Path(variant.interior_pdf_path)
-    if not path.exists():
-        result.checks.append(CheckResult("Interior PDF", False, f"File not found: {path}"))
-        return
+    vr = validate_interior(path, variant.trim_size, variant.page_count)
 
-    size_mb = path.stat().st_size / (1024 * 1024)
-    if size_mb > 650:
-        result.checks.append(CheckResult("Interior size", False, f"File too large ({size_mb:.1f} MB, max 650 MB)"))
+    if not vr.valid:
+        for err in vr.errors:
+            result.checks.append(CheckResult("Interior PDF", False, err))
     else:
-        result.checks.append(CheckResult("Interior PDF", True, f"Exists ({size_mb:.1f} MB)"))
+        size_mb = path.stat().st_size / (1024 * 1024)
+        result.checks.append(CheckResult(
+            "Interior PDF", True,
+            f"Valid ({vr.page_count} pages, {size_mb:.1f} MB)",
+        ))
+    for warn in vr.warnings:
+        result.checks.append(CheckResult("Interior PDF", False, warn, "warning"))
 
 
 def _check_cover(variant: Variant, result: ChecklistResult) -> None:
+    from libro.common.pdf_validation import validate_cover
+
     if not variant.cover_pdf_path:
         result.checks.append(CheckResult("Cover", False, "No cover generated"))
         return
 
     path = Path(variant.cover_pdf_path)
-    if not path.exists():
-        result.checks.append(CheckResult("Cover", False, f"File not found: {path}"))
-        return
+    vr = validate_cover(path, variant.trim_size, variant.page_count)
 
-    result.checks.append(CheckResult("Cover", True, f"Exists: {path.name}"))
+    if not vr.valid:
+        for err in vr.errors:
+            result.checks.append(CheckResult("Cover", False, err))
+    else:
+        size_mb = path.stat().st_size / (1024 * 1024)
+        result.checks.append(CheckResult(
+            "Cover", True,
+            f"Valid ({vr.width_pts:.0f}x{vr.height_pts:.0f} pts, {size_mb:.2f} MB)",
+        ))
+    for warn in vr.warnings:
+        result.checks.append(CheckResult("Cover", False, warn, "warning"))
 
 
 def _check_keywords(variant: Variant, result: ChecklistResult) -> None:
