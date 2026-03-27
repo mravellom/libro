@@ -13,6 +13,10 @@ from libro.kdp import selectors as sel
 
 log = logging.getLogger(__name__)
 
+# Retry configuration
+MAX_STEP_RETRIES = 2
+RETRY_DELAY_SECONDS = 5
+
 
 @dataclass
 class UploadResult:
@@ -22,6 +26,7 @@ class UploadResult:
     published: bool = False
     skipped: bool = False
     error: str | None = None
+    retries: int = 0
 
 
 @dataclass
@@ -32,6 +37,11 @@ class BatchResult:
     skipped: int = 0
     errors: int = 0
     details: list[UploadResult] = field(default_factory=list)
+
+    @property
+    def failed_variant_ids(self) -> list[int]:
+        """IDs of variants that failed (for retry)."""
+        return [d.variant_id for d in self.details if d.error and not d.skipped]
 
 
 class KDPUploader:
@@ -146,6 +156,7 @@ class KDPUploader:
         """Upload a single variant to KDP.
 
         Fills all forms and pauses for user confirmation before publish.
+        Includes retry logic for transient failures (network, timeouts).
         """
         from libro.models.variant import Variant
         from libro.publication.metadata import generate_metadata
@@ -161,6 +172,23 @@ class KDPUploader:
 
         if not variant.interior_pdf_path or not variant.cover_pdf_path:
             result.error = f"Variant #{variant_id} missing interior or cover PDF"
+            return result
+
+        # Validate PDFs before attempting upload
+        from libro.common.pdf_validation import validate_interior, validate_cover
+
+        iv = validate_interior(
+            Path(variant.interior_pdf_path), variant.trim_size, variant.page_count
+        )
+        if not iv.valid:
+            result.error = f"Interior PDF invalid: {iv.summary}"
+            return result
+
+        cv = validate_cover(
+            Path(variant.cover_pdf_path), variant.trim_size, variant.page_count
+        )
+        if not cv.valid:
+            result.error = f"Cover PDF invalid: {cv.summary}"
             return result
 
         # Run checklist
@@ -179,27 +207,34 @@ class KDPUploader:
         print(f"\n  --- Subiendo: {variant.title[:50]}... ---")
 
         try:
+            # Check session is still valid before starting
+            if not await self._ensure_session():
+                result.error = "Session expired and could not be restored"
+                return result
+
             # Navigate to create new paperback
             await self._rate_limiter.wait()
-            await self._page.goto(
-                sel.KDP_CREATE_PAPERBACK_URL,
-                wait_until="domcontentloaded",
-                timeout=30000,
-            )
-            await asyncio.sleep(3)  # Let page fully load
+            await self._navigate_with_retry(sel.KDP_CREATE_PAPERBACK_URL)
+            await asyncio.sleep(3)
 
-            # Step 1: Book Details
+            # Step 1: Book Details (with retry)
             print("  [1/3] Llenando detalles del libro...")
-            await self._fill_book_details(metadata)
+            await self._retry_step(
+                self._fill_book_details, metadata,
+                step_name="Book Details",
+            )
 
             # Click Save and Continue
             await self._rate_limiter.wait()
             await self._click_first_match(sel.SAVE_CONTINUE_1)
-            await asyncio.sleep(5)  # Wait for page transition
+            await asyncio.sleep(5)
 
-            # Step 2: Content (manuscript + cover)
+            # Step 2: Content (manuscript + cover, with retry)
             print("  [2/3] Subiendo manuscrito y portada...")
-            await self._upload_content(variant)
+            await self._retry_step(
+                self._upload_content, variant,
+                step_name="Content Upload",
+            )
 
             # Click Save and Continue
             await self._rate_limiter.wait()
@@ -227,11 +262,10 @@ class KDPUploader:
             if user_input == "quit":
                 result.skipped = True
                 raise KeyboardInterrupt("User quit")
-            elif user_input == "skip" or user_input == "s":
+            elif user_input in ("skip", "s"):
                 result.skipped = True
                 print("  [SKIP] Saltado — no se marco como publicado")
             else:
-                # Mark as published in DB
                 await self._mark_published(session, variant_id)
                 result.published = True
                 print("  [OK] Marcado como publicado en la base de datos")
@@ -241,12 +275,7 @@ class KDPUploader:
         except Exception as e:
             result.error = str(e)
             log.error(f"Upload error for variant #{variant_id}: {e}")
-            # Take debug screenshot
-            try:
-                await self._page.screenshot(path="/tmp/libro_kdp_error.png")
-                print(f"  [ERROR] Screenshot guardado en /tmp/libro_kdp_error.png")
-            except Exception:
-                pass
+            await self._save_error_screenshot(variant_id)
 
         return result
 
@@ -254,8 +283,13 @@ class KDPUploader:
         self,
         session,
         variant_ids: list[int],
+        retry_failed: bool = True,
     ) -> BatchResult:
-        """Upload a batch of variants with pauses between each."""
+        """Upload a batch of variants with pauses between each.
+
+        If retry_failed is True, variants that fail with transient errors
+        are retried once at the end of the batch.
+        """
         batch = BatchResult(total=len(variant_ids))
 
         for i, vid in enumerate(variant_ids, 1):
@@ -283,7 +317,111 @@ class KDPUploader:
             if i < len(variant_ids):
                 await self._rate_limiter.wait()
 
+        # Retry failed uploads (transient errors only)
+        failed_ids = batch.failed_variant_ids
+        if retry_failed and failed_ids:
+            print(f"\n{'=' * 60}")
+            print(f"  REINTENTANDO {len(failed_ids)} libro(s) fallido(s)...")
+            print(f"{'=' * 60}")
+
+            for vid in failed_ids:
+                await self._rate_limiter.wait()
+                print(f"\n  Reintentando Variant #{vid}...")
+
+                try:
+                    result = await self.upload_variant(session, vid)
+                    result.retries += 1
+
+                    if result.published or result.success:
+                        # Replace the failed result with the successful retry
+                        batch.details = [d for d in batch.details if d.variant_id != vid]
+                        batch.details.append(result)
+                        batch.errors -= 1
+                        if result.published:
+                            batch.published += 1
+                        print(f"  [OK] Variant #{vid} exitoso en reintento")
+                    else:
+                        print(f"  [FAIL] Variant #{vid} fallo de nuevo: {result.error}")
+
+                except KeyboardInterrupt:
+                    print("\n  Sesion terminada por el usuario.")
+                    break
+
+        # Summary
+        print(f"\n{'=' * 60}")
+        print(f"  RESUMEN: {batch.published} publicados, "
+              f"{batch.skipped} saltados, {batch.errors} errores "
+              f"de {batch.total} total")
+        print(f"{'=' * 60}")
+
         return batch
+
+    # --- Recovery & retry helpers ---
+
+    async def _ensure_session(self) -> bool:
+        """Verify session is still active; attempt to recover if expired."""
+        try:
+            await self._page.goto(sel.KDP_BOOKSHELF_URL, wait_until="domcontentloaded", timeout=15000)
+            await asyncio.sleep(2)
+            if await self._check_bookshelf():
+                return True
+        except Exception as e:
+            log.warning(f"Session check failed: {e}")
+
+        # Session expired — ask user to re-login
+        print("\n  [!] Sesion expirada. Por favor inicia sesion de nuevo en el navegador.")
+        input("  Presiona Enter cuando hayas iniciado sesion... ")
+
+        try:
+            await self._page.goto(sel.KDP_BOOKSHELF_URL, wait_until="domcontentloaded")
+            await asyncio.sleep(3)
+            return await self._check_bookshelf()
+        except Exception:
+            return False
+
+    async def _navigate_with_retry(self, url: str, max_retries: int = MAX_STEP_RETRIES) -> None:
+        """Navigate to a URL with retry on failure."""
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                return
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    log.warning(f"Navigation failed (attempt {attempt + 1}): {e}")
+                    await asyncio.sleep(RETRY_DELAY_SECONDS)
+        raise RuntimeError(f"Navigation failed after {max_retries + 1} attempts: {last_error}")
+
+    async def _retry_step(self, step_fn, *args, step_name: str = "step") -> None:
+        """Execute a form-filling step with retry on failure."""
+        last_error = None
+        for attempt in range(MAX_STEP_RETRIES + 1):
+            try:
+                await step_fn(*args)
+                return
+            except Exception as e:
+                last_error = e
+                if attempt < MAX_STEP_RETRIES:
+                    log.warning(f"{step_name} failed (attempt {attempt + 1}): {e}")
+                    print(f"    [!] {step_name} fallo, reintentando...")
+                    await asyncio.sleep(RETRY_DELAY_SECONDS)
+                    # Try to recover the page state
+                    try:
+                        await self._page.reload(wait_until="domcontentloaded")
+                        await asyncio.sleep(3)
+                    except Exception:
+                        pass
+        raise RuntimeError(f"{step_name} failed after {MAX_STEP_RETRIES + 1} attempts: {last_error}")
+
+    async def _save_error_screenshot(self, variant_id: int) -> None:
+        """Save a debug screenshot on error."""
+        path = f"/tmp/libro_kdp_error_{variant_id}.png"
+        try:
+            await self._page.screenshot(path=path)
+            print(f"  [ERROR] Screenshot guardado en {path}")
+        except Exception:
+            pass
 
     async def _fill_book_details(self, metadata) -> None:
         """Fill Step 1: Book Details form."""
