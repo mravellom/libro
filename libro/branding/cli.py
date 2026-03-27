@@ -120,7 +120,7 @@ def cover(
             author_name = author or ""
 
         output_dir = settings.output_dir / f"variant_{variant_id}"
-        output_path = output_dir / "cover.png"
+        output_path = output_dir / "cover.pdf"
 
         tpl = Path(template_path) if template_path else None
 

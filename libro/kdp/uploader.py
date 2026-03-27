@@ -44,6 +44,9 @@ class KDPUploader:
     4. Bot marks as published in DB
     """
 
+    # Persistent session directory — cookies & storage survive between runs
+    SESSION_DIR = Path.home() / ".libro" / "kdp_session"
+
     def __init__(
         self,
         headless: bool = False,
@@ -58,16 +61,25 @@ class KDPUploader:
         self._page: Page | None = None
 
     async def start(self) -> bool:
-        """Launch browser and wait for manual login.
+        """Launch browser with persistent session and wait for login.
+
+        Uses a persistent browser context so cookies/session are saved
+        between runs — avoids repeated CAPTCHAs.
 
         Returns True if login detected, False on timeout.
         """
+        self.SESSION_DIR.mkdir(parents=True, exist_ok=True)
+
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(
+
+        # Persistent context = cookies, localStorage, etc. saved to disk
+        self._context = await self._playwright.chromium.launch_persistent_context(
+            user_data_dir=str(self.SESSION_DIR),
             headless=self.headless,
-            args=["--disable-blink-features=AutomationControlled"],
-        )
-        self._context = await self._browser.new_context(
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+            ],
             viewport={"width": 1400, "height": 900},
             user_agent=(
                 "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -75,22 +87,51 @@ class KDPUploader:
             ),
             locale="en-US",
         )
-        self._page = await self._context.new_page()
+        self._page = self._context.pages[0] if self._context.pages else await self._context.new_page()
 
         # Navigate to KDP
         await self._page.goto(sel.KDP_BOOKSHELF_URL, wait_until="domcontentloaded")
+        await asyncio.sleep(3)
 
+        # Check if already logged in (session from previous run)
+        already_logged_in = await self._check_bookshelf()
+        if already_logged_in:
+            print("\n" + "=" * 60)
+            print("  LIBRO KDP UPLOADER — Semi-Automatizado")
+            print("=" * 60)
+            print("\n  [OK] Sesion anterior detectada — ya estas logueado!")
+            print("=" * 60)
+            return True
+
+        # Not logged in — ask user to login manually
         print("\n" + "=" * 60)
         print("  LIBRO KDP UPLOADER — Semi-Automatizado")
         print("=" * 60)
         print("\n  1. Inicia sesion en KDP manualmente en el navegador")
         print("  2. Cuando estes en el Bookshelf, presiona Enter aqui")
+        print()
+        print("  NOTA: Tu sesion se guardara para futuras ejecuciones")
+        print("        (no tendras que resolver el CAPTCHA cada vez)")
         print("=" * 60)
 
         # Wait for user to login
         input("\n  Presiona Enter cuando hayas iniciado sesion... ")
 
-        # Verify login by checking for bookshelf
+        if await self._check_bookshelf():
+            return True
+
+        # Retry: navigate to bookshelf directly
+        await self._page.goto(sel.KDP_BOOKSHELF_URL, wait_until="domcontentloaded")
+        await asyncio.sleep(3)
+
+        if await self._check_bookshelf():
+            return True
+
+        print("\n  [ERROR] No se detecto login. Verifica e intenta de nuevo.")
+        return False
+
+    async def _check_bookshelf(self) -> bool:
+        """Check if the bookshelf is visible (user is logged in)."""
         try:
             await self._page.wait_for_selector(
                 sel.BOOKSHELF_INDICATOR,
@@ -99,18 +140,7 @@ class KDPUploader:
             print("\n  [OK] Login detectado — Bookshelf visible")
             return True
         except Exception:
-            # Maybe they're on a different page but logged in — try navigating
-            await self._page.goto(sel.KDP_BOOKSHELF_URL, wait_until="domcontentloaded")
-            try:
-                await self._page.wait_for_selector(
-                    sel.BOOKSHELF_INDICATOR,
-                    timeout=10000,
-                )
-                print("\n  [OK] Login detectado — Bookshelf visible")
-                return True
-            except Exception:
-                print("\n  [ERROR] No se detecto login. Verifica e intenta de nuevo.")
-                return False
+            return False
 
     async def upload_variant(self, session, variant_id: int) -> UploadResult:
         """Upload a single variant to KDP.
@@ -371,7 +401,7 @@ class KDPUploader:
             for fi in file_inputs:
                 accept = await fi.get_attribute("accept") or ""
                 name = await fi.get_attribute("name") or ""
-                if "image" in accept.lower() or "cover" in name.lower():
+                if "cover" in name.lower() or "pdf" in accept.lower() or "image" in accept.lower():
                     await fi.set_input_files(str(cover_path))
                     break
 
@@ -427,8 +457,8 @@ class KDPUploader:
 
     async def close(self) -> None:
         """Close browser and cleanup."""
-        if self._browser:
-            await self._browser.close()
+        if self._context:
+            await self._context.close()
         if self._playwright:
             await self._playwright.stop()
 

@@ -142,7 +142,6 @@ class CoverGenerator:
         font_name: str = "Sans",
         template_path: Path | None = None,
         seed: int | None = None,
-        background_path: Path | str | None = None,
     ) -> Path:
         dims = get_cover_dimensions(trim_size, page_count)
         tw = _px(dims.total_width)
@@ -167,26 +166,9 @@ class CoverGenerator:
         fcx = fl + fw // 2    # front center x
         ch = th - 2 * bleed   # content height
 
-        # --- AI background on front cover ---
-        has_bg = False
-        if background_path and Path(background_path).exists():
-            try:
-                bg = Image.open(background_path).convert("RGBA")
-                bg = bg.resize((fw, th))
-                img.paste(bg, (fl, 0))
-                draw = ImageDraw.Draw(img)
-                has_bg = True
-                log.info(f"AI background applied: {background_path}")
-            except Exception as e:
-                log.warning(f"Failed to apply background: {e}")
-
         # --- Apply layout ---
         layout_name = "legacy"
-        if has_bg:
-            # With AI background: use a text-focused layout (panel + text only)
-            tp = self._layout_ai_background(img, draw, fl, bleed, fw, ch,
-                                            primary, secondary, accent)
-        elif seed is not None:
+        if seed is not None:
             rng = random.Random(seed)
             idx = rng.randint(0, len(LAYOUTS) - 1)
             layout_name = LAYOUTS[idx]
@@ -233,10 +215,12 @@ class CoverGenerator:
         self._draw_back_cover(draw, bleed + bw // 2, bleed, bw, ch,
                               font_name, secondary, accent, primary)
 
-        # Save
-        output_path = Path(output_path or "cover.png")
+        # Save as PDF (KDP requires PDF for paperback covers)
+        output_path = Path(output_path or "cover.pdf")
+        if output_path.suffix.lower() != ".pdf":
+            output_path = output_path.with_suffix(".pdf")
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        img.convert("RGB").save(str(output_path), dpi=(DPI, DPI))
+        img.convert("RGB").save(str(output_path), format="PDF", resolution=DPI)
         log.info(f"Cover: {output_path} ({tw}x{th}px, {layout_name})")
         return output_path
 
@@ -302,78 +286,6 @@ class CoverGenerator:
         bf = _get_font(fn, 16)
         draw.text((bax + 10, bay + bah // 2 - 10), "ISBN / Barcode Area",
                   font=bf, fill=(150, 150, 150))
-
-    # ------------------------------------------------------------------
-    # AI Background layout — overlays text panels on AI-generated image
-    # ------------------------------------------------------------------
-
-    def _layout_ai_background(self, img, draw, x, y, w, h, primary, secondary, accent) -> dict:
-        """Layout optimized for AI-generated backgrounds.
-
-        Adds semi-transparent panels behind text areas for readability
-        while keeping the beautiful AI background visible.
-        """
-        # Title panel — frosted glass effect
-        layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
-        ld = ImageDraw.Draw(layer)
-        py = y + int(h * 0.10)
-        ph = int(h * 0.32)
-        # Dark panel with rounded corners
-        ld.rounded_rectangle(
-            [x + int(w * 0.04), py, x + int(w * 0.96), py + ph],
-            radius=25, fill=_rgba(primary, 185),
-        )
-        # Subtle accent border
-        ld.rounded_rectangle(
-            [x + int(w * 0.04), py, x + int(w * 0.96), py + ph],
-            radius=25, outline=_rgba(accent, 100), width=2,
-        )
-        # Blur the panel edges slightly for frosted effect
-        layer = layer.filter(ImageFilter.GaussianBlur(radius=3))
-        img_temp = Image.alpha_composite(img, layer)
-        img.paste(img_temp)
-
-        # Re-draw sharp border on top
-        draw2 = ImageDraw.Draw(img)
-        draw2.rounded_rectangle(
-            [x + int(w * 0.04), py, x + int(w * 0.96), py + ph],
-            radius=25, outline=_rgba(accent, 80), width=2,
-        )
-
-        # Decorative line under title panel
-        ly = py + ph + int(h * 0.02)
-        m = int(w * 0.15)
-        draw2.line([x + m, ly, x + w - m, ly], fill=_rgba(accent, 120), width=2)
-
-        # Author panel at bottom
-        layer2 = Image.new("RGBA", img.size, (0, 0, 0, 0))
-        ld2 = ImageDraw.Draw(layer2)
-        ay = y + int(h * 0.78)
-        ah = int(h * 0.10)
-        ld2.rounded_rectangle(
-            [x + int(w * 0.12), ay, x + int(w * 0.88), ay + ah],
-            radius=15, fill=_rgba(primary, 170),
-        )
-        ld2.rounded_rectangle(
-            [x + int(w * 0.12), ay, x + int(w * 0.88), ay + ah],
-            radius=15, outline=_rgba(accent, 60), width=1,
-        )
-        img_temp2 = Image.alpha_composite(img, layer2)
-        img.paste(img_temp2)
-
-        # Top and bottom accent bars (thin)
-        draw3 = ImageDraw.Draw(img)
-        bh = int(h * 0.015)
-        draw3.rectangle([x, y, x + w, y + bh], fill=_rgba(accent, 180))
-        draw3.rectangle([x, y + h - bh, x + w, y + h], fill=_rgba(accent, 180))
-
-        return {
-            "title_y_pct": 0.13, "title_font_size": 72,
-            "subtitle_y_pct": 0.30, "subtitle_font_size": 34,
-            "author_y_pct": 0.80, "author_font_size": 30,
-            "margin_inches": 0.6,
-            "text_color": secondary,
-        }
 
     # ------------------------------------------------------------------
     # Legacy (seed=None)

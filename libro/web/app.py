@@ -521,7 +521,8 @@ def launch_deploy(req: DeployRequest):
     import shutil
 
     limit = req.limit
-    cmd = f"cd /home/fabian/workSpace/Libro && source .venv/bin/activate && libro kdp batch --limit {limit}"
+    log_file = "/tmp/libro_kdp_deploy.log"
+    cmd = f"cd /home/fabian/workSpace/Libro && source .venv/bin/activate && libro kdp batch --limit {limit} 2>&1 | tee {log_file}"
 
     # Try to open in a new terminal window
     terminal = None
@@ -551,8 +552,20 @@ def launch_deploy(req: DeployRequest):
         "launched": True,
         "terminal": terminal,
         "limit": limit,
+        "log_file": log_file,
         "message": f"Deploy launched in {terminal} — {limit} books",
     }
+
+
+@app.get("/api/deploy/log")
+def deploy_log(lines: int = 100):
+    """Read the last N lines of the deploy log."""
+    log_path = Path("/tmp/libro_kdp_deploy.log")
+    if not log_path.exists():
+        return {"log": "", "exists": False}
+    text = log_path.read_text()
+    last_lines = text.strip().split("\n")[-lines:]
+    return {"log": "\n".join(last_lines), "exists": True}
 
 
 # --- Templates, Feedback & Seasonal ---

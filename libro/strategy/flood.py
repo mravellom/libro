@@ -268,23 +268,10 @@ def _process_niche(
                 style = _niche_aware_style(keyword)
                 author_name = ""
 
-        cover_path = output_dir / "cover.png"
-
-        # Try to generate AI background (slow on CPU but high quality)
-        bg_path = None
-        try:
-            from libro.branding.ai_backgrounds import generate_background
-            bg_path = generate_background(
-                variant_id=variant.id,
-                niche_keyword=keyword,
-                output_dir=output_dir,
-                seed=variant.interior_seed or variant.id,
-            )
-        except Exception as e:
-            log.info(f"AI background skipped for #{variant.id}: {e}")
+        cover_path = output_dir / "cover.pdf"
 
         generator = CoverGenerator()
-        generator.generate(
+        cover_path = generator.generate(
             title=variant.title,
             subtitle=variant.subtitle or "",
             author=author_name,
@@ -296,7 +283,6 @@ def _process_niche(
             accent_color=style.accent_color,
             font_name=style.font,
             seed=variant.interior_seed or variant.id,
-            background_path=bg_path,
         )
         variant.cover_pdf_path = str(cover_path)
         variant.status = "pending_review" if settings.require_human_review else "ready"
