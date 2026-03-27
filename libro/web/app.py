@@ -5,15 +5,18 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from libro.database import get_session, ensure_schema
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+STATIC_DIR = Path(__file__).parent / "static"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 app = FastAPI(title="Libro KDP Dashboard", version="0.1.0")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.on_event("startup")
@@ -606,3 +609,92 @@ def get_seasonal():
     from libro.generation.niche_enricher import get_seasonal_with_lead_time
     niches = get_seasonal_with_lead_time(weeks_ahead=6)
     return [{"keyword": kw, "interior_types": types} for kw, types in niches]
+
+
+# --- Analytics ---
+
+@app.get("/api/analytics")
+def get_analytics():
+    """Get full analytics report: ROI by niche, cohorts, performers."""
+    from libro.strategy.analytics import generate_analytics_report
+    from dataclasses import asdict
+    with get_session() as session:
+        report = generate_analytics_report(session)
+    return {
+        "generated_at": report.generated_at.isoformat(),
+        "total_published": report.total_published,
+        "total_estimated_monthly_revenue": round(report.total_estimated_monthly_revenue, 2),
+        "niche_roi": [
+            {
+                "keyword": n.keyword,
+                "published": n.published_count,
+                "total_revenue": round(n.total_estimated_revenue, 2),
+                "avg_per_book": round(n.avg_revenue_per_book, 2),
+                "scale_rate": round(n.scale_rate, 2),
+                "kill_rate": round(n.kill_rate, 2),
+                "best_interior": n.best_interior_type,
+            }
+            for n in report.niche_roi
+        ],
+        "cohorts": [
+            {
+                "period": c.period,
+                "books": c.books_published,
+                "avg_bsr": int(c.avg_bsr) if c.avg_bsr else None,
+                "avg_revenue": round(c.avg_revenue, 2),
+                "scale": c.scale_count,
+                "kill": c.kill_count,
+                "pending": c.pending_count,
+            }
+            for c in report.cohorts
+        ],
+        "top_performers": [
+            {
+                "title": p.title,
+                "niche": p.niche_keyword,
+                "revenue": round(p.estimated_monthly_revenue, 2),
+                "bsr": p.latest_bsr,
+                "decision": p.decision,
+            }
+            for p in report.top_performers
+        ],
+        "bottom_performers": [
+            {
+                "title": p.title,
+                "niche": p.niche_keyword,
+                "revenue": round(p.estimated_monthly_revenue, 2),
+                "bsr": p.latest_bsr,
+                "decision": p.decision,
+            }
+            for p in report.bottom_performers
+        ],
+        "interior_types": report.interior_type_stats,
+        "marketplaces": report.marketplace_stats,
+    }
+
+
+# --- ISBN & Barcode ---
+
+@app.post("/api/barcode/{variant_id}")
+def generate_barcode_endpoint(variant_id: int, isbn: str = ""):
+    """Generate an EAN-13 barcode for a variant."""
+    from libro.publication.isbn import validate_isbn13, generate_barcode
+    from libro.config import get_settings
+
+    if not isbn:
+        return {"error": "ISBN is required", "valid": False}
+
+    info = validate_isbn13(isbn)
+    if not info.valid:
+        return {"error": info.error, "valid": False}
+
+    settings = get_settings()
+    output_dir = settings.output_dir / f"variant_{variant_id}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    barcode_path = generate_barcode(isbn, output_dir / "barcode.png")
+    return {
+        "valid": True,
+        "isbn": info.formatted,
+        "barcode_path": str(barcode_path),
+    }

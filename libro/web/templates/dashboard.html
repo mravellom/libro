@@ -5,42 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Libro KDP Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background: #0f172a; color: #e2e8f0; }
-        .card { background: #1e293b; border-radius: 12px; border: 1px solid #334155; }
-        .stat-value { font-size: 2rem; font-weight: 700; }
-        .badge-scale { background: #059669; color: white; }
-        .badge-iterate { background: #d97706; color: white; }
-        .badge-kill { background: #dc2626; color: white; }
-        .badge-pending { background: #475569; color: white; }
-        .badge-ready { background: #2563eb; color: white; }
-        .badge-draft { background: #64748b; color: white; }
-        .badge-published { background: #059669; color: white; }
-        .badge-evergreen { background: #059669; color: white; }
-        .badge-trending { background: #7c3aed; color: white; }
-        .progress-bar { background: #334155; border-radius: 9999px; overflow: hidden; }
-        .progress-fill { background: linear-gradient(90deg, #3b82f6, #06b6d4); height: 100%; border-radius: 9999px; transition: width 0.5s; }
-        table { width: 100%; }
-        th { text-align: left; padding: 8px 12px; color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; }
-        td { padding: 8px 12px; border-bottom: 1px solid #1e293b; font-size: 0.875rem; }
-        .btn { padding: 8px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
-        .btn:hover { transform: translateY(-1px); }
-        .btn-blue { background: #2563eb; color: white; }
-        .btn-blue:hover { background: #1d4ed8; }
-        .btn-red { background: #dc2626; color: white; }
-        .btn-red:hover { background: #b91c1c; }
-        .btn-green { background: #059669; color: white; }
-        .btn-green:hover { background: #047857; }
-        .btn-purple { background: #7c3aed; color: white; }
-        .btn-purple:hover { background: #6d28d9; }
-        .btn-amber { background: #d97706; color: white; }
-        .btn-amber:hover { background: #b45309; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .toast { position: fixed; top: 20px; right: 20px; padding: 12px 24px; border-radius: 8px; z-index: 1000; animation: slideIn 0.3s ease; }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
 </head>
 <body class="min-h-screen p-6">
 
