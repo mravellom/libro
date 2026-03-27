@@ -14,8 +14,10 @@ playwright install chromium
 # Initialize database
 libro db init
 
-# Copy and edit config
+# Copy and edit config (or edit config.yaml directly)
 cp config.example.yaml config.yaml
+# Set your Keepa API key in .env (see .env.example)
+cp .env.example .env
 ```
 
 ## Workflow

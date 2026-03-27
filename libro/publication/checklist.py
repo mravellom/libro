@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -316,7 +316,7 @@ def _check_publishing_velocity(session: Session, result: ChecklistResult) -> Non
     from libro.config import get_settings
 
     settings = get_settings()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     count_7d = (
         session.query(Publication)

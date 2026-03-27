@@ -7,7 +7,7 @@ best, then feeds those insights back into the variant generation pipeline.
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -87,7 +87,7 @@ def analyze_performance(session: Session, days: int = 90) -> FeedbackInsights:
         FeedbackInsights with recommendations for the generation pipeline.
     """
     insights = FeedbackInsights()
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
 
     # Get all publications with decisions
     pubs = (

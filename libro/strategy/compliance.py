@@ -3,7 +3,7 @@
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -62,7 +62,7 @@ def assess_portfolio_risk(session: Session) -> RiskAssessment:
     """
     settings = get_settings()
     r = RiskAssessment()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     # --- Load all active publications ---
     pubs = (
@@ -285,7 +285,7 @@ def update_financial_exposure(session: Session) -> dict:
 
     Callable from cron or evaluate pipeline without running full compliance checks.
     """
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     pubs = (
         session.query(Publication)
         .filter(

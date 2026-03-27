@@ -1,0 +1,70 @@
+amazon_marketplace: "com"
+default_trim_size: "6x9"
+default_page_count: 120
+evaluation_period_days: 14
+snapshot_interval_hours: 12
+
+# Scoring weights (must sum to 1.0)
+scoring:
+  weight_demand: 0.4
+  weight_competition: 0.2
+  weight_trend: 0.2
+  weight_stability: 0.1
+  weight_price: 0.1
+
+# Scoring thresholds
+min_bsr_for_demand: 500000
+max_reviews_for_low_competition: 50
+min_opportunity_score: 0.6
+min_price_for_margin: 6.99
+
+# Scraping
+scraper_delay_min: 2.0
+scraper_delay_max: 5.0
+
+# Similarity guard thresholds
+similarity_title_threshold: 0.7
+similarity_max_similar_active: 3
+
+# Strategy — Flooding
+flood_daily_target: 3
+flood_max_daily_target: 5
+flood_evergreen_ratio: 0.7
+flood_trending_ratio: 0.3
+max_bsr_threshold: 300000
+
+# Human review gate (books need approval before upload queue)
+require_human_review: true
+
+# Strategy — Evaluation (advisory, no auto-kill)
+evaluation_min_days: 21
+auto_apply_decisions: false
+default_snooze_days: 7
+
+# Compliance (5.4.8 risk prevention)
+compliance_velocity_7d_max: 10
+compliance_velocity_30d_max: 30
+compliance_similarity_threshold: 0.85
+compliance_max_similar_catalog: 5
+compliance_recheck_days: 7
+
+# Strategy — Marketplaces
+marketplaces:
+  - "com"
+  - "de"
+  - "co.jp"
+
+# Strategy — Revenue targets
+target_catalog_size: 500
+target_net_per_book: 1.00
+
+# KDP Uploader (delays to simulate human behavior)
+kdp_delay_min: 3.0
+kdp_delay_max: 8.0
+
+# Selectors (update when Amazon changes HTML)
+selectors:
+  search_result_item: "div[data-component-type='s-search-result']"
+  product_title: "h2 a span"
+  product_price: "span.a-price > span.a-offscreen"
+  bsr_text: "#productDetails_detailBullets_sections1 tr"

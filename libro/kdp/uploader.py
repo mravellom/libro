@@ -559,7 +559,7 @@ class KDPUploader:
 
     async def _mark_published(self, session, variant_id: int) -> None:
         """Mark variant as published in the database."""
-        from datetime import datetime, timedelta
+        from datetime import UTC, datetime, timedelta
         from libro.models.variant import Variant
         from libro.models.publication import Publication
 
@@ -577,7 +577,7 @@ class KDPUploader:
         if existing:
             return
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         pub = Publication(
             variant_id=variant_id,
             published_at=now,

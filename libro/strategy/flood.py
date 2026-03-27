@@ -151,10 +151,10 @@ def flood_pipeline(
 
 def _check_velocity_warning(session: Session, settings) -> None:
     """Log a warning if publishing velocity exceeds compliance thresholds."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
     from libro.models.publication import Publication
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     count_7d = (
         session.query(Publication)
         .filter(Publication.published_at >= now - timedelta(days=7))

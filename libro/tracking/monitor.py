@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -83,7 +83,7 @@ def capture_all_active(
     headless: bool = True,
 ) -> list[TrackingSnapshot]:
     """Capture snapshots for all publications in evaluation period."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     active_pubs = (
         session.query(Publication)

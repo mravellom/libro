@@ -1,6 +1,6 @@
 """CLI commands for tracking module."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 import typer
@@ -99,7 +99,7 @@ def decide(
             raise typer.Exit(1)
 
         pub.decision = decision
-        pub.decided_at = datetime.utcnow()
+        pub.decided_at = datetime.now(UTC)
 
         # Update niche status
         if pub.variant and pub.variant.niche:
@@ -133,10 +133,10 @@ def report(pub_id: Optional[int] = typer.Option(None, help="Publication ID")):
 
             eval_status = ""
             if p.evaluation_end:
-                if datetime.utcnow() > p.evaluation_end:
+                if datetime.now(UTC) > p.evaluation_end:
                     eval_status = " [red](evaluation period ended)[/red]"
                 else:
-                    days_left = (p.evaluation_end - datetime.utcnow()).days
+                    days_left = (p.evaluation_end - datetime.now(UTC)).days
                     eval_status = f" [dim]({days_left} days left)[/dim]"
             console.print(f"  Evaluation: {p.evaluation_start} → {p.evaluation_end}{eval_status}")
 

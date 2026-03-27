@@ -242,8 +242,8 @@ def score_niche_in_db(session, niche_id: int) -> NicheScore | None:
     niche.opportunity_score = score.opportunity
     niche.status = "scored"
 
-    from datetime import datetime
-    niche.scored_at = datetime.utcnow()
+    from datetime import UTC, datetime
+    niche.scored_at = datetime.now(UTC)
 
     session.flush()
     return score

@@ -6,7 +6,7 @@ Setup:
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from libro.database import get_session_factory
 from libro.tracking.monitor import capture_all_active
@@ -25,7 +25,7 @@ def cron_tick() -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    log.info(f"Cron tick started at {datetime.utcnow().isoformat()}")
+    log.info(f"Cron tick started at {datetime.now(UTC).isoformat()}")
 
     factory = get_session_factory()
     session = factory()

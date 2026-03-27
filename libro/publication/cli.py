@@ -1,6 +1,6 @@
 """CLI commands for publication preparation module."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 import typer
@@ -103,7 +103,7 @@ def mark_published(
                 console.print(f"[green]Updated ASIN to {asin}[/green]")
             return
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         pub = Publication(
             variant_id=variant_id,
             asin=asin,

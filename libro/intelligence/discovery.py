@@ -2,7 +2,7 @@
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -93,7 +93,7 @@ class DiscoveryPipeline:
                 existing.price = raw.price
                 existing.rating = raw.rating
                 existing.reviews_count = raw.reviews_count
-                existing.scraped_at = datetime.utcnow()
+                existing.scraped_at = datetime.now(UTC)
                 stored.append(existing)
             else:
                 product = Product(

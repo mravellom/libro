@@ -5,7 +5,7 @@ import logging
 import random
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -56,8 +56,8 @@ def evaluate_all(session: Session, days: int | None = None) -> EvaluationResult:
 
     settings = get_settings()
     eval_days = days or settings.evaluation_min_days
-    cutoff = datetime.utcnow() - timedelta(days=eval_days)
-    now = datetime.utcnow()
+    cutoff = datetime.now(UTC) - timedelta(days=eval_days)
+    now = datetime.now(UTC)
     result = EvaluationResult()
 
     pubs = (

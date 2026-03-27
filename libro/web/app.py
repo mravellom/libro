@@ -343,7 +343,7 @@ def get_recommendations():
 def decide_batch(req: BatchDecisionRequest):
     """Apply decisions to multiple publications at once."""
     from libro.models.publication import Publication
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
     results = []
     with get_session() as session:
         for item in req.decisions:
@@ -356,7 +356,7 @@ def decide_batch(req: BatchDecisionRequest):
 
             if decision == "snooze":
                 snooze_days = item.get("snooze_days", 7)
-                pub.snoozed_until = datetime.utcnow() + timedelta(days=snooze_days)
+                pub.snoozed_until = datetime.now(UTC) + timedelta(days=snooze_days)
                 pub.recommended_decision = None
                 pub.recommendation_confidence = None
                 pub.recommendation_reasons = None
@@ -367,11 +367,11 @@ def decide_batch(req: BatchDecisionRequest):
                     results.append({"pub_id": pub_id, "error": "no recommendation to accept"})
                     continue
                 pub.decision = pub.recommended_decision
-                pub.decided_at = datetime.utcnow()
+                pub.decided_at = datetime.now(UTC)
                 results.append({"pub_id": pub_id, "decision": pub.decision})
             elif decision in ("scale", "iterate", "kill"):
                 pub.decision = decision
-                pub.decided_at = datetime.utcnow()
+                pub.decided_at = datetime.now(UTC)
                 results.append({"pub_id": pub_id, "decision": pub.decision})
             else:
                 results.append({"pub_id": pub_id, "error": f"invalid decision: {decision}"})
@@ -382,14 +382,14 @@ def decide_batch(req: BatchDecisionRequest):
 def decide_publication(pub_id: int, req: DecisionRequest):
     """Apply a human decision to a publication."""
     from libro.models.publication import Publication
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
     with get_session() as session:
         pub = session.get(Publication, pub_id)
         if not pub:
             return {"error": f"Publication #{pub_id} not found"}
 
         if req.decision == "snooze":
-            pub.snoozed_until = datetime.utcnow() + timedelta(days=req.snooze_days)
+            pub.snoozed_until = datetime.now(UTC) + timedelta(days=req.snooze_days)
             pub.recommended_decision = None
             pub.recommendation_confidence = None
             pub.recommendation_reasons = None
@@ -407,7 +407,7 @@ def decide_publication(pub_id: int, req: DecisionRequest):
             return {"error": f"Invalid decision: {decision}"}
 
         pub.decision = decision
-        pub.decided_at = datetime.utcnow()
+        pub.decided_at = datetime.now(UTC)
         return {"pub_id": pub_id, "decision": pub.decision}
 
 
