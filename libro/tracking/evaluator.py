@@ -172,7 +172,7 @@ class PerformanceEvaluator:
         self, snapshots: list[TrackingSnapshot], reasons: list[str], metrics: dict
     ) -> str:
         """Analyze review growth."""
-        reviews = [(s.captured_at, s.reviews_count) for s in snapshots]
+        reviews = [(s.captured_at, s.reviews_count) for s in snapshots if s.reviews_count is not None]
         if not reviews:
             return "unknown"
 

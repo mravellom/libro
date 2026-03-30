@@ -71,7 +71,9 @@ def ensure_schema():
                         col_type = col_type
                         break
 
-                sql = f"ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type}"
+                quoted_table = f'"{table.name}"'
+                quoted_col = f'"{col.name}"'
+                sql = f"ALTER TABLE {quoted_table} ADD COLUMN {quoted_col} {col_type}"
                 with engine.begin() as conn:
                     conn.execute(text(sql))
                 log.info(f"Auto-migrated: {sql}")

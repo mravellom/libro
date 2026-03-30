@@ -442,7 +442,7 @@ class KDPUploader:
 
         # Author (split into first/last)
         author_parts = metadata.author.rsplit(" ", 1) if metadata.author else ["", ""]
-        first_name = author_parts[0] if len(author_parts) > 0 else ""
+        first_name = author_parts[0] if len(author_parts) > 1 else ""
         last_name = author_parts[1] if len(author_parts) > 1 else author_parts[0]
 
         await self._try_fill(sel.AUTHOR_FIRST_NAME, first_name)

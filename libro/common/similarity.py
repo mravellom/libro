@@ -52,7 +52,7 @@ def check_similarity(
                 f"Title '{title}' is {sim:.0%} similar to existing variant #{v.id}: '{v.title}'"
             )
 
-    if similar_count >= max_similar:
+    if similar_count > max_similar:
         warnings.insert(
             0,
             f"BLOCKED: {similar_count} similar titles already exist (max {max_similar}). "
@@ -96,7 +96,7 @@ def check_catalog_similarity(
                 f"Cross-catalog match: '{v.title}' (#{v.id}) — {sim:.0%} similar"
             )
 
-    if similar_count >= max_similar:
+    if similar_count > max_similar:
         warnings.insert(
             0,
             f"SPAM RISK: {similar_count} catalog-wide titles with >{threshold:.0%} similarity. "

@@ -72,7 +72,7 @@ class DiscoveryPipeline:
         finally:
             await scraper.close()
 
-        self._session.commit()
+        self._session.flush()
         return niche
 
     def _store_products(
@@ -153,8 +153,8 @@ class DiscoveryPipeline:
         prices = [p.price for p in products if p.price is not None]
         niche.avg_price = sum(prices) / len(prices) if prices else None
 
-        # Average reviews
-        reviews = [p.reviews_count for p in products]
+        # Average reviews (exclude None — unscraped products)
+        reviews = [p.reviews_count for p in products if p.reviews_count is not None]
         niche.avg_reviews = sum(reviews) / len(reviews) if reviews else None
 
         self._session.flush()

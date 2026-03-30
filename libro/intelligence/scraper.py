@@ -54,11 +54,12 @@ class AmazonScraper:
         self._marketplace = settings.amazon_marketplace
         self._browser: Browser | None = None
         self._page: Page | None = None
+        self._pw = None
 
     async def _ensure_browser(self) -> Page:
         if self._page is None:
-            pw = await async_playwright().start()
-            self._browser = await pw.chromium.launch(headless=self._headless)
+            self._pw = await async_playwright().start()
+            self._browser = await self._pw.chromium.launch(headless=self._headless)
             context = await self._browser.new_context(
                 user_agent=(
                     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -330,3 +331,6 @@ class AmazonScraper:
             await self._browser.close()
             self._browser = None
             self._page = None
+        if self._pw:
+            await self._pw.stop()
+            self._pw = None
