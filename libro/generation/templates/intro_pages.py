@@ -119,6 +119,29 @@ Great uses for grid pages:
 
 Each square is your building block. Use them however serves you best.""",
     },
+    "handwriting": {
+        "title": "Welcome to Your Handwriting Practice Book",
+        "body": """\
+Better handwriting is built one line at a time.
+
+This book gives you the classic three-line practice rule: a top line, \
+a dotted midline, and a solid baseline. Lowercase letters reach the \
+dotted line, capitals and tall letters reach the top, and everything \
+sits on the baseline.
+
+How to get the most out of your practice:
+
+  • Practice a little every day — 10 focused minutes beats an hour \
+once a week
+  • Slow down — speed comes after consistency, never before it
+  • Pick a few letters or words per session and repeat them
+  • Copy text you enjoy — quotes, song lyrics, favorite passages
+  • Compare today's page with your first page to see your progress
+
+Whether you're refining print, learning cursive, or just want \
+handwriting you're proud of — every page here is a fresh start. \
+Pick up your pen and begin.""",
+    },
     "anxiety": {
         "title": "Welcome to Your Anxiety Journal",
         "body": """\

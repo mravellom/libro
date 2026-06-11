@@ -7,8 +7,17 @@ from libro.generation.personas import (
 )
 
 
-def test_personas_list_has_14_entries():
-    assert len(PERSONAS) == 14
+def test_personas_list_has_17_entries():
+    assert len(PERSONAS) == 17
+
+
+def test_get_personas_for_niche_handwriting_practice():
+    personas = get_personas_for_niche("handwriting practice")
+    names = [p.name for p in personas]
+    # Penmanship personas must match first so variants use the handwriting rule
+    assert names[:3] == ["young_writer_parent", "student_penmanship", "adult_penmanship"]
+    for p in personas[:3]:
+        assert p.preferred_interiors == ["handwriting"]
 
 
 def test_get_personas_for_niche_anxiety_journal():

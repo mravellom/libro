@@ -207,6 +207,7 @@ def register_templates():
     from libro.generation.templates.lined import LinedTemplate
     from libro.generation.templates.dotted import DottedTemplate
     from libro.generation.templates.grid import GridTemplate
+    from libro.generation.templates.handwriting import HandwritingTemplate
     from libro.generation.templates.thematic import (
         AnxietyJournalTemplate,
         FitnessLogTemplate,
@@ -218,6 +219,7 @@ def register_templates():
     TEMPLATE_REGISTRY["lined"] = LinedTemplate
     TEMPLATE_REGISTRY["dotted"] = DottedTemplate
     TEMPLATE_REGISTRY["grid"] = GridTemplate
+    TEMPLATE_REGISTRY["handwriting"] = HandwritingTemplate
     TEMPLATE_REGISTRY["gratitude"] = GratitudeTemplate
     TEMPLATE_REGISTRY["planner"] = DailyPlannerTemplate
     # Thematic templates with niche-specific content

@@ -42,6 +42,14 @@ KDP_CATEGORIES = {
         "Education & Teaching > Studying & Workbooks",
         "Children's Books > Activities, Crafts & Games",
     ],
+    "penmanship_adult": [
+        "Crafts, Hobbies & Home > Crafts & Hobbies > Calligraphy",
+        "Education & Teaching > Studying & Workbooks",
+    ],
+    "penmanship_adult": [
+        "Crafts, Hobbies & Home > Crafts & Hobbies > Calligraphy",
+        "Education & Teaching > Studying & Workbooks",
+    ],
     "default": [
         "Self-Help > Journal Writing",
         "Self-Help > Personal Transformation",
@@ -179,6 +187,11 @@ def _detect_categories(title: str, interior_type: str) -> list[str]:
     for cat_key, hints in specific_hints.items():
         for hint in hints:
             if hint in title_lower:
+                # Children's Books category only fits kid-targeted titles
+                if cat_key == "education" and any(
+                    t in title_lower for t in ("adult", "teen", "student")
+                ):
+                    return KDP_CATEGORIES["penmanship_adult"]
                 return KDP_CATEGORIES[cat_key]
 
     # Fall back to general categories
@@ -197,6 +210,7 @@ def _generate_description(variant: Variant) -> str:
         "grid": "structured grid pages for precise tracking, charts, and organized logging",
         "gratitude": "guided gratitude prompts designed to build a positive daily habit",
         "planner": "structured daily planning pages with schedule blocks, priorities, and notes",
+        "handwriting": "three-line penmanship practice pages with a dotted midline guide and clear baseline",
     }
 
     feature = interior_features.get(variant.interior_type, "thoughtfully designed pages")

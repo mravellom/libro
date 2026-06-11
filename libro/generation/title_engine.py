@@ -234,6 +234,15 @@ def _pain_to_benefit(pain_point: str) -> str:
         "income tracking": "Track Every Dollar",
         "tax prep": "Stay Organized Year-Round",
         "time management": "Own Your Schedule",
+        "letter formation": "Master Letter Formation",
+        "pencil control": "Build Pencil Control",
+        "writing readiness": "Get Ready to Write",
+        "messy handwriting": "Write Clearly and Confidently",
+        "slow note-taking": "Write Faster and Neater",
+        "illegible schoolwork": "Make Every Word Legible",
+        "illegible handwriting": "Make Your Writing Legible Again",
+        "out of practice": "Rebuild Your Writing Habit",
+        "wanting elegant writing": "Develop Elegant Handwriting",
         "curriculum planning": "Plan With Confidence",
         "tracking progress": "See Your Growth",
         "keeping kids engaged": "Make Learning Fun",
@@ -284,6 +293,10 @@ def _generate_description(
         "grid": "structured grid pages for precise tracking and data logging",
         "gratitude": "guided gratitude prompts to shift your mindset daily",
         "planner": "structured daily planning pages with schedule, priorities, and notes",
+        "handwriting": (
+            "classic three-line penmanship practice pages — solid top line, "
+            "dotted midline guide, and a clear baseline"
+        ),
     }
 
     value_prop = (
@@ -355,6 +368,10 @@ def _generate_bullet_points(
             "Daily schedule blocks from morning to evening",
             "Priority checklist to focus on what matters",
             "Notes section for ideas and reminders",
+        ],
+        "handwriting": [
+            "Classic three-line rule with dotted midline — the same guide used in penmanship classes",
+            "Heavier baseline keeps every letter sitting straight",
         ],
     }
 

@@ -191,6 +191,12 @@ class InteriorStyle:
         default_factory=lambda: ["schedule", "priorities", "notes"]
     )
 
+    # Handwriting-specific (3-line penmanship rule)
+    hw_rule_height: float = 34.0
+    hw_group_gap: float = 18.0
+    hw_midline_dash: tuple = (3, 3)
+    hw_baseline_width: float = 0.9
+
 
 def generate_interior_style(seed: int, interior_type: str) -> InteriorStyle:
     """Generate a unique but reproducible InteriorStyle from a seed.
@@ -265,6 +271,13 @@ def generate_interior_style(seed: int, interior_type: str) -> InteriorStyle:
         planner_priority_count=rng.randint(3, 7),
         planner_sections_order=rng.choice(planner_orders),
     )
+
+    # Handwriting params drawn AFTER all others: appending new rng draws at the
+    # end keeps every existing field reproducible for already-created variants.
+    style.hw_rule_height = rng.uniform(30.0, 38.0)
+    style.hw_group_gap = rng.uniform(14.0, 22.0)
+    style.hw_midline_dash = rng.choice([(3, 3), (2, 4), (4, 3)])
+    style.hw_baseline_width = rng.uniform(0.8, 1.1)
 
     return style
 
